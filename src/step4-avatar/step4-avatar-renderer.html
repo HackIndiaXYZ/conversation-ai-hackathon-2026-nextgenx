@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NEXTGENX — Step 4: 3D Avatar Renderer</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:#0a0c10; --surface:#111318; --surface2:#181c24;
+    --border:rgba(255,255,255,0.07);
+    --accent:#63d2a8; --accent2:#4facfe;
+    --blue:#4facfe; --pink:#f472b6;
+    --text:#e8eaf0; --muted:#6b7280;
+    --mono:'DM Mono',monospace; --sans:'Syne',sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);
+    min-height:100vh;padding:28px 16px;overflow-x:hidden;}
+  body::before{content:'';position:fixed;inset:0;
+    background-image:linear-gradient(rgba(79,172,254,0.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(79,172,254,0.03) 1px,transparent 1px);
+    background-size:40px 40px;pointer-events:none;z-index:0;}
+  .wrapper{position:relative;z-index:1;width:100%;max-width:1000px;margin:0 auto;}
+
+  .header{display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:28px;padding-bottom:16px;border-bottom:1px solid var(--border);}
+  .logo{font-weight:800;font-size:18px;letter-spacing:0.08em;color:var(--accent);}
+  .step-badge{font-family:var(--mono);font-size:11px;color:var(--muted);
+    background:var(--surface);border:1px solid var(--border);
+    padding:4px 12px;border-radius:20px;letter-spacing:0.1em;}
+
+  .title-block{margin-bottom:22px;}
+  .title-block h1{font-size:clamp(22px,3.5vw,34px);font-weight:800;letter-spacing:-0.02em;line-height:1.1;margin-bottom:6px;}
+  .title-block h1 span{color:var(--blue);}
+  .title-block p{font-family:var(--mono);font-size:12px;color:var(--muted);}
+
+  /* Main layout */
+  .main-grid{display:grid;grid-template-columns:1fr 300px;gap:16px;margin-bottom:16px;}
+  @media(max-width:700px){.main-grid{grid-template-columns:1fr;}}
+
+  .card{background:var(--surface);border:1px solid var(--border);
+    border-radius:14px;padding:20px;position:relative;overflow:hidden;}
+  .card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(79,172,254,0.35),transparent);}
+  .card-label{font-family:var(--mono);font-size:10px;letter-spacing:0.15em;
+    color:var(--blue);text-transform:uppercase;margin-bottom:14px;
+    display:flex;align-items:center;gap:8px;}
+  .card-label::before{content:'';width:6px;height:6px;border-radius:50%;
+    background:var(--blue);box-shadow:0 0 8px var(--blue);}
+
+  /* Avatar stage */
+  .avatar-stage{
+    background:#0d1117;border-radius:10px;overflow:hidden;
+    position:relative;width:100%;padding-bottom:75%;
+  }
+  #avatarCanvas{position:absolute;inset:0;width:100%;height:100%;}
+  .avatar-overlay{
+    position:absolute;bottom:12px;left:12px;right:12px;
+    display:flex;justify-content:space-between;align-items:flex-end;
+    pointer-events:none;
+  }
+  .avatar-name-tag{
+    background:rgba(10,12,16,0.85);backdrop-filter:blur(8px);
+    border:1px solid var(--border);border-radius:8px;
+    padding:7px 12px;font-family:var(--mono);font-size:11px;
+  }
+  .avatar-name-tag .name{color:var(--text);font-weight:500;}
+  .avatar-name-tag .role{color:var(--muted);font-size:10px;margin-top:1px;}
+  .speaking-indicator{
+    display:flex;gap:3px;align-items:flex-end;height:20px;
+    padding:0 4px;
+  }
+  .speaking-indicator span{
+    width:3px;background:var(--accent);border-radius:2px;
+    animation:wave 0.8s ease-in-out infinite;
+  }
+  .speaking-indicator span:nth-child(1){height:6px;animation-delay:0s;}
+  .speaking-indicator span:nth-child(2){height:12px;animation-delay:0.1s;}
+  .speaking-indicator span:nth-child(3){height:18px;animation-delay:0.2s;}
+  .speaking-indicator span:nth-child(4){height:10px;animation-delay:0.3s;}
+  .speaking-indicator span:nth-child(5){height:6px;animation-delay:0.4s;}
+  .speaking-indicator.silent span{animation:none;height:4px;opacity:0.3;}
+  @keyframes wave{0%,100%{transform:scaleY(0.4)}50%{transform:scaleY(1)}}
+
+  /* Controls panel */
+  .controls-panel{display:flex;flex-direction:column;gap:12px;}
+
+  /* Persona switcher */
+  .persona-btn{
+    width:100%;background:var(--surface2);border:1px solid var(--border);
+    border-radius:8px;padding:10px 12px;cursor:pointer;text-align:left;
+    transition:all 0.2s;display:flex;align-items:center;gap:10px;
+  }
+  .persona-btn:hover{border-color:rgba(79,172,254,0.3);}
+  .persona-btn.active{border-color:var(--blue);background:rgba(79,172,254,0.08);}
+  .persona-avatar{width:32px;height:32px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;font-size:16px;
+    background:var(--surface);border:1px solid var(--border);}
+  .persona-info .pname{font-size:12px;font-weight:600;color:var(--text);}
+  .persona-info .prole{font-family:var(--mono);font-size:10px;color:var(--muted);}
+
+  /* Blend shape sliders */
+  .bs-control{margin-bottom:8px;}
+  .bs-control label{display:flex;justify-content:space-between;
+    font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:3px;}
+  .bs-control label span{color:var(--blue);}
+  .bs-control input[type=range]{width:100%;accent-color:var(--blue);}
+
+  /* Viseme buttons */
+  .viseme-btns{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;}
+  .vbtn{
+    background:var(--surface2);border:1px solid var(--border);
+    border-radius:6px;padding:5px 2px;cursor:pointer;text-align:center;
+    font-family:var(--mono);font-size:9px;color:var(--muted);transition:all 0.15s;
+  }
+  .vbtn:hover{border-color:var(--blue);color:var(--blue);}
+  .vbtn.active{background:rgba(79,172,254,0.15);border-color:var(--blue);color:var(--blue);}
+
+  /* Stats row */
+  .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;}
+  .stat-box{background:var(--surface2);border:1px solid var(--border);
+    border-radius:8px;padding:10px 12px;}
+  .stat-label{font-family:var(--mono);font-size:9px;letter-spacing:0.1em;
+    color:var(--muted);text-transform:uppercase;margin-bottom:3px;}
+  .stat-val{font-family:var(--mono);font-size:16px;font-weight:500;}
+
+  /* Demo controls */
+  .demo-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;}
+  .btn{font-family:var(--mono);font-size:11px;padding:8px 14px;
+    border-radius:7px;border:1px solid var(--border);
+    background:transparent;color:var(--muted);cursor:pointer;transition:all 0.2s;}
+  .btn:hover{background:var(--surface2);color:var(--text);}
+  .btn.primary{border-color:rgba(79,172,254,0.5);color:var(--blue);background:rgba(79,172,254,0.07);}
+  .btn.primary:hover{background:rgba(79,172,254,0.14);}
+  .btn.green{border-color:rgba(99,210,168,0.5);color:var(--accent);background:rgba(99,210,168,0.07);}
+
+  /* Emotion row */
+  .emotion-row{display:flex;gap:8px;margin-bottom:14px;}
+  .emot-btn{flex:1;padding:8px;border-radius:8px;border:1px solid var(--border);
+    background:var(--surface2);cursor:pointer;text-align:center;
+    font-family:var(--mono);font-size:10px;color:var(--muted);transition:all 0.2s;}
+  .emot-btn:hover{border-color:var(--blue);}
+  .emot-btn.active{border-color:var(--pink);color:var(--pink);background:rgba(244,114,182,0.08);}
+  .emot-icon{font-size:18px;display:block;margin-bottom:3px;}
+
+  .note{font-family:var(--mono);font-size:11px;color:var(--muted);
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:8px;padding:12px 16px;line-height:1.8;margin-top:14px;}
+  .note strong{color:var(--accent);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <div class="header">
+    <div class="logo">NEXTGENX</div>
+    <div class="step-badge">STEP 04 / 06 — 3D AVATAR RENDERER</div>
+  </div>
+
+  <div class="title-block">
+    <h1>3D <span>Avatar</span> Renderer</h1>
+    <p>Three.js · procedural head mesh · ARKit morph targets · real-time viseme animation</p>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-box"><div class="stat-label">FPS</div><div class="stat-val" id="statFps" style="color:var(--accent)">60</div></div>
+    <div class="stat-box"><div class="stat-label">Visemes/s</div><div class="stat-val" id="statVps" style="color:var(--blue)">0</div></div>
+    <div class="stat-box"><div class="stat-label">Morph targets</div><div class="stat-val" style="color:var(--pink)">8</div></div>
+    <div class="stat-box"><div class="stat-label">Render ms</div><div class="stat-val" id="statRms" style="color:var(--accent2)">0</div></div>
+  </div>
+
+  <div class="main-grid">
+
+    <!-- Avatar canvas -->
+    <div class="card" style="padding:16px;">
+      <div class="card-label">Live Avatar</div>
+      <div class="avatar-stage">
+        <canvas id="avatarCanvas"></canvas>
+        <div class="avatar-overlay">
+          <div class="avatar-name-tag">
+            <div class="name" id="avatarNameTag">Dr. Priya Mehta</div>
+            <div class="role" id="avatarRoleTag">Interventional Cardiologist</div>
+          </div>
+          <div class="speaking-indicator silent" id="speakingIndicator">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Demo buttons -->
+      <div class="demo-row" style="margin-top:12px;">
+        <button class="btn primary" onclick="demoSpeak()">▶ Demo speak</button>
+        <button class="btn green" onclick="demoFullSentence()">🎬 Full sentence</button>
+        <button class="btn" onclick="toggleIdle()">💤 Toggle idle</button>
+        <button class="btn" onclick="resetPose()">↺ Reset pose</button>
+      </div>
+
+      <!-- Emotion buttons -->
+      <div class="emotion-row">
+        <button class="emot-btn active" id="emot-neutral" onclick="setEmotion('neutral')">
+          <span class="emot-icon">😐</span>neutral
+        </button>
+        <button class="emot-btn" id="emot-engaged" onclick="setEmotion('engaged')">
+          <span class="emot-icon">🤔</span>engaged
+        </button>
+        <button class="emot-btn" id="emot-skeptical" onclick="setEmotion('skeptical')">
+          <span class="emot-icon">🧐</span>skeptical
+        </button>
+        <button class="emot-btn" id="emot-positive" onclick="setEmotion('positive')">
+          <span class="emot-icon">😊</span>positive
+        </button>
+      </div>
+
+      <!-- Viseme buttons -->
+      <div style="margin-bottom:8px;">
+        <div class="card-label" style="margin-bottom:8px;">Manual viseme test</div>
+        <div class="viseme-btns" id="visemeBtns"></div>
+      </div>
+    </div>
+
+    <!-- Controls -->
+    <div class="controls-panel">
+
+      <!-- Persona switcher -->
+      <div class="card">
+        <div class="card-label">Persona</div>
+        <div id="personaBtns"></div>
+      </div>
+
+      <!-- Blend shape controls -->
+      <div class="card">
+        <div class="card-label">Blend Shapes</div>
+        <div id="bsControls"></div>
+      </div>
+
+      <!-- Head controls -->
+      <div class="card">
+        <div class="card-label">Head Controls</div>
+        <div class="bs-control">
+          <label>Yaw (left/right) <span id="yawVal">0°</span></label>
+          <input type="range" min="-30" max="30" value="0" id="yawSlider"
+            oninput="headYaw=this.value/100*0.52;document.getElementById('yawVal').textContent=this.value+'°'"/>
+        </div>
+        <div class="bs-control">
+          <label>Pitch (up/down) <span id="pitchVal">0°</span></label>
+          <input type="range" min="-20" max="20" value="0" id="pitchSlider"
+            oninput="headPitch=this.value/100*0.35;document.getElementById('pitchVal').textContent=this.value+'°'"/>
+        </div>
+        <div class="bs-control">
+          <label>Eye look X <span id="eyeXVal">0</span></label>
+          <input type="range" min="-10" max="10" value="0" id="eyeXSlider"
+            oninput="eyeLookX=this.value/100*0.15;document.getElementById('eyeXVal').textContent=this.value"/>
+        </div>
+        <div class="bs-control" style="margin-bottom:0">
+          <label>Eye look Y <span id="eyeYVal">0</span></label>
+          <input type="range" min="-8" max="8" value="0" id="eyeYSlider"
+            oninput="eyeLookY=this.value/100*0.12;document.getElementById('eyeYVal').textContent=this.value"/>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>→ Step 3 integration:</strong> <code>window.__onViseme(id, weights, ms)</code> drives morph targets in real time<br/>
+    <strong>→ Step 5 integration:</strong> <code>window.__onEmotion(type)</code> triggers expression presets<br/>
+    <strong>→ Architecture:</strong> Procedural mesh demo — production replaces with Ready Player Me .glb loaded via GLTFLoader
+  </div>
+
+</div>
+
+<!-- Three.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════
+// NEXTGENX Step 4 — 3D Avatar Renderer
+// Procedural head mesh + morph targets + real-time animation
+// ═══════════════════════════════════════════════════════════
+
+// ── Personas ──────────────────────────────────────────────
+const PERSONAS = [
+  { id:'cardiologist', name:'Dr. Priya Mehta',  role:'Interventional Cardiologist', emoji:'🫀', skinH:25,  skinS:0.6, skinL:0.55 },
+  { id:'oncologist',   name:'Dr. Arjun Sinha',  role:'Medical Oncologist',          emoji:'🧬', skinH:30,  skinS:0.5, skinL:0.45 },
+  { id:'gp',           name:'Dr. Kavitha Rao',  role:'General Practitioner',        emoji:'🩺', skinH:22,  skinS:0.55,skinL:0.50 },
+  { id:'neurologist',  name:'Dr. Rahul Verma',  role:'Neurologist',                 emoji:'🧠', skinH:28,  skinS:0.45,skinL:0.42 },
+];
+
+// ── Three.js setup ────────────────────────────────────────
+const canvas   = document.getElementById('avatarCanvas');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.1;
+
+const scene  = new THREE.Scene();
+scene.background = new THREE.Color(0x0d1117);
+scene.fog = new THREE.FogExp2(0x0d1117, 0.08);
+
+const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+camera.position.set(0, 0.15, 2.2);
+
+function resizeRenderer() {
+  const w = canvas.parentElement.clientWidth;
+  const h = canvas.parentElement.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize', resizeRenderer);
+
+// ── Lighting ──────────────────────────────────────────────
+const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+scene.add(ambient);
+
+const keyLight = new THREE.DirectionalLight(0xfff5e8, 1.6);
+keyLight.position.set(1.5, 2, 2);
+keyLight.castShadow = true;
+scene.add(keyLight);
+
+const fillLight = new THREE.DirectionalLight(0xe8f0ff, 0.6);
+fillLight.position.set(-2, 1, 1);
+scene.add(fillLight);
+
+const rimLight = new THREE.DirectionalLight(0x4facfe, 0.8);
+rimLight.position.set(0, 0.5, -2);
+scene.add(rimLight);
+
+// Subtle point light (eyes glow)
+const eyeLight = new THREE.PointLight(0x88ccff, 0.3, 1);
+eyeLight.position.set(0, 0.18, 0.5);
+scene.add(eyeLight);
+
+// ── Avatar group ──────────────────────────────────────────
+const avatarGroup = new THREE.Group();
+scene.add(avatarGroup);
+
+let headMesh, jawMesh, leftEye, rightEye, leftLid, rightLid;
+let leftBrow, rightBrow, noseMesh;
+let upperLipMesh, lowerLipMesh;
+let neckMesh, shoulderMesh;
+let currentPersona = PERSONAS[0];
+
+function buildAvatar(persona) {
+  // Clear previous
+  while (avatarGroup.children.length) avatarGroup.remove(avatarGroup.children[0]);
+
+  const skin = new THREE.Color().setHSL(persona.skinH/360, persona.skinS, persona.skinL);
+  const skinMat  = new THREE.MeshStandardMaterial({ color: skin, roughness: 0.6, metalness: 0.0 });
+  const darkSkin = new THREE.Color().setHSL(persona.skinH/360, persona.skinS, persona.skinL - 0.12);
+  const darkMat  = new THREE.MeshStandardMaterial({ color: darkSkin, roughness: 0.65, metalness: 0.0 });
+  const lipColor = new THREE.Color().setHSL(persona.skinH/360, 0.55, persona.skinL - 0.18);
+  const lipMat   = new THREE.MeshStandardMaterial({ color: lipColor, roughness: 0.5, metalness: 0.0 });
+  const whiteMat = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, roughness: 0.3 });
+  const irisMat  = new THREE.MeshStandardMaterial({ color: 0x2a1a0a, roughness: 0.2 });
+  const scleraMat= new THREE.MeshStandardMaterial({ color: 0xfef9f0, roughness: 0.4 });
+  const pupilMat = new THREE.MeshStandardMaterial({ color: 0x080808, roughness: 0.1, metalness: 0.3 });
+  const hairColor= new THREE.Color().setHSL(0.07, 0.3, 0.12);
+  const hairMat  = new THREE.MeshStandardMaterial({ color: hairColor, roughness: 0.8 });
+
+  // ── Head ──
+  const headGeo = new THREE.SphereGeometry(0.22, 32, 32);
+  // Slightly flatten vertically for a more natural head shape
+  headGeo.applyMatrix4(new THREE.Matrix4().makeScale(1.0, 1.15, 0.92));
+  headMesh = new THREE.Mesh(headGeo, skinMat);
+  headMesh.position.set(0, 0, 0);
+  headMesh.castShadow = true;
+  avatarGroup.add(headMesh);
+
+  // ── Jaw ──
+  const jawGeo = new THREE.SphereGeometry(0.16, 24, 24);
+  jawGeo.applyMatrix4(new THREE.Matrix4().makeScale(1.0, 0.7, 0.9));
+  jawMesh = new THREE.Mesh(jawGeo, skinMat);
+  jawMesh.position.set(0, -0.14, 0.04);
+  jawMesh.castShadow = true;
+  avatarGroup.add(jawMesh);
+
+  // ── Nose ──
+  const noseGeo = new THREE.SphereGeometry(0.035, 12, 12);
+  noseGeo.applyMatrix4(new THREE.Matrix4().makeScale(1.0, 0.8, 1.4));
+  noseMesh = new THREE.Mesh(noseGeo, skinMat);
+  noseMesh.position.set(0, -0.02, 0.215);
+  avatarGroup.add(noseMesh);
+
+  // Nostrils
+  [-0.025, 0.025].forEach(dx => {
+    const ng = new THREE.SphereGeometry(0.016, 10, 10);
+    const nm = new THREE.Mesh(ng, darkMat);
+    nm.position.set(dx, -0.05, 0.21);
+    avatarGroup.add(nm);
+  });
+
+  // ── Eyes ──
+  function makeEye(dx) {
+    const eyeGroup = new THREE.Group();
+    eyeGroup.position.set(dx, 0.06, 0.185);
+    // Sclera
+    const sg = new THREE.SphereGeometry(0.036, 20, 20);
+    const sm = new THREE.Mesh(sg, scleraMat);
+    eyeGroup.add(sm);
+    // Iris
+    const ig = new THREE.SphereGeometry(0.022, 16, 16);
+    const im = new THREE.Mesh(ig, irisMat);
+    im.position.set(0, 0, 0.02);
+    eyeGroup.add(im);
+    // Pupil
+    const pg = new THREE.SphereGeometry(0.012, 12, 12);
+    const pm = new THREE.Mesh(pg, pupilMat);
+    pm.position.set(0, 0, 0.032);
+    eyeGroup.add(pm);
+    avatarGroup.add(eyeGroup);
+    return eyeGroup;
+  }
+  leftEye  = makeEye(-0.075);
+  rightEye = makeEye( 0.075);
+
+  // ── Eyelids ──
+  function makeLid(dx) {
+    const lg = new THREE.SphereGeometry(0.038, 16, 8, 0, Math.PI*2, 0, Math.PI*0.5);
+    const lm = new THREE.Mesh(lg, skinMat);
+    lm.position.set(dx, 0.062, 0.183);
+    lm.rotation.x = -0.1;
+    avatarGroup.add(lm);
+    return lm;
+  }
+  leftLid  = makeLid(-0.075);
+  rightLid = makeLid( 0.075);
+
+  // ── Eyebrows ──
+  function makeBrow(dx) {
+    const bg = new THREE.BoxGeometry(0.055, 0.008, 0.012);
+    const bm = new THREE.Mesh(bg, hairMat);
+    bm.position.set(dx, 0.115, 0.19);
+    bm.rotation.z = dx < 0 ? 0.12 : -0.12;
+    avatarGroup.add(bm);
+    return bm;
+  }
+  leftBrow  = makeBrow(-0.075);
+  rightBrow = makeBrow( 0.075);
+
+  // ── Lips ──
+  const ulGeo = new THREE.SphereGeometry(0.055, 16, 8);
+  ulGeo.applyMatrix4(new THREE.Matrix4().makeScale(1.0, 0.4, 0.6));
+  upperLipMesh = new THREE.Mesh(ulGeo, lipMat);
+  upperLipMesh.position.set(0, -0.10, 0.195);
+  avatarGroup.add(upperLipMesh);
+
+  const llGeo = new THREE.SphereGeometry(0.055, 16, 8);
+  llGeo.applyMatrix4(new THREE.Matrix4().makeScale(1.0, 0.45, 0.6));
+  lowerLipMesh = new THREE.Mesh(llGeo, lipMat);
+  lowerLipMesh.position.set(0, -0.125, 0.19);
+  avatarGroup.add(lowerLipMesh);
+
+  // ── Teeth (hidden, shown on jaw open) ──
+  const tGeo = new THREE.BoxGeometry(0.07, 0.018, 0.012);
+  const tMesh = new THREE.Mesh(tGeo, whiteMat);
+  tMesh.position.set(0, -0.113, 0.198);
+  tMesh.name = 'teeth';
+  avatarGroup.add(tMesh);
+
+  // ── Ears ──
+  [-0.225, 0.225].forEach(dx => {
+    const eg = new THREE.SphereGeometry(0.045, 12, 12);
+    eg.applyMatrix4(new THREE.Matrix4().makeScale(0.45, 0.8, 0.4));
+    const em = new THREE.Mesh(eg, skinMat);
+    em.position.set(dx, 0, 0);
+    avatarGroup.add(em);
+  });
+
+  // ── Neck ──
+  const neckGeo = new THREE.CylinderGeometry(0.09, 0.11, 0.22, 16);
+  neckMesh = new THREE.Mesh(neckGeo, skinMat);
+  neckMesh.position.set(0, -0.33, 0);
+  neckMesh.castShadow = true;
+  avatarGroup.add(neckMesh);
+
+  // ── Shoulders / coat ──
+  const coatColor = new THREE.Color(0xf8f9fa);
+  const coatMat = new THREE.MeshStandardMaterial({ color: coatColor, roughness: 0.7 });
+  const sGeo = new THREE.CylinderGeometry(0.32, 0.38, 0.28, 24);
+  shoulderMesh = new THREE.Mesh(sGeo, coatMat);
+  shoulderMesh.position.set(0, -0.60, 0);
+  shoulderMesh.castShadow = true;
+  avatarGroup.add(shoulderMesh);
+
+  // Coat collar
+  const colGeo = new THREE.TorusGeometry(0.1, 0.025, 8, 24, Math.PI);
+  const colMesh = new THREE.Mesh(colGeo, coatMat);
+  colMesh.position.set(0, -0.43, 0.04);
+  colMesh.rotation.x = -0.3;
+  avatarGroup.add(colMesh);
+
+  // ── Hair ──
+  const hairGeo = new THREE.SphereGeometry(0.225, 24, 24);
+  hairGeo.applyMatrix4(new THREE.Matrix4().makeScale(1.0, 0.85, 0.92));
+  const hairMesh = new THREE.Mesh(hairGeo, hairMat);
+  hairMesh.position.set(0, 0.06, -0.02);
+  avatarGroup.add(hairMesh);
+
+  // Update name tag
+  document.getElementById('avatarNameTag').textContent = persona.name;
+  document.getElementById('avatarRoleTag').textContent = persona.role;
+}
+
+// ── Morph target state ────────────────────────────────────
+let morphState = {
+  jawOpen:0, mouthSmile:0, mouthPucker:0,
+  mouthFunnel:0, mouthStretch:0, mouthPress:0,
+  mouthClose:0.8, cheekPuff:0
+};
+let morphTarget = { ...morphState };
+let headYaw=0, headPitch=0, headYawTarget=0, headPitchTarget=0;
+let eyeLookX=0, eyeLookY=0;
+let idleEnabled=true;
+let idleT=0;
+let blinkT=0, nextBlink=3, blinkAmt=0;
+let currentEmotion='neutral';
+let isAvatarSpeaking=false;
+let visemePerSec=0, visemeCount=0, lastVpsT=Date.now();
+
+// ── Emotion presets ───────────────────────────────────────
+const EMOTION_PRESETS = {
+  neutral:   { browHeight:0,    browFurrow:0,    smileAmt:0,    eyeOpen:1.0 },
+  engaged:   { browHeight:0.08, browFurrow:0,    smileAmt:0.15, eyeOpen:1.1 },
+  skeptical: { browHeight:-0.04,browFurrow:0.06, smileAmt:0,    eyeOpen:0.85},
+  positive:  { browHeight:0.06, browFurrow:0,    smileAmt:0.28, eyeOpen:1.05},
+};
+let emotion = { ...EMOTION_PRESETS.neutral };
+let emotionTarget = { ...emotion };
+
+// ── Blend shape controls init ─────────────────────────────
+function initBSControls() {
+  const cont = document.getElementById('bsControls');
+  cont.innerHTML = '';
+  Object.keys(morphState).forEach(k => {
+    const el = document.createElement('div');
+    el.className = 'bs-control';
+    el.innerHTML = `
+      <label>${k} <span id="bsc-${k}">${morphState[k].toFixed(2)}</span></label>
+      <input type="range" min="0" max="100" value="${Math.round(morphState[k]*100)}"
+        id="bs-${k}" oninput="morphTarget['${k}']=this.value/100;document.getElementById('bsc-${k}').textContent=(this.value/100).toFixed(2)"/>
+    `;
+    cont.appendChild(el);
+  });
+}
+
+// ── Viseme buttons ────────────────────────────────────────
+const VISEME_IDS = ['rest','PP','FF','TH','DD','kk','CH','SS','nn','RR','aa','E','I','O','U'];
+const VISEME_BS = {
+  rest:{ jawOpen:0,   mouthClose:0.8, mouthFunnel:0,   mouthPucker:0,   mouthSmile:0,   mouthStretch:0,  mouthPress:0,   cheekPuff:0   },
+  PP:  { jawOpen:0,   mouthClose:1.0, mouthFunnel:0,   mouthPucker:0.3, mouthSmile:0,   mouthStretch:0,  mouthPress:0.8, cheekPuff:0   },
+  FF:  { jawOpen:0.1, mouthClose:0.3, mouthFunnel:0.2, mouthPucker:0,   mouthSmile:0,   mouthStretch:0.4,mouthPress:0,   cheekPuff:0   },
+  TH:  { jawOpen:0.2, mouthClose:0,   mouthFunnel:0,   mouthPucker:0,   mouthSmile:0.1, mouthStretch:0.2,mouthPress:0,   cheekPuff:0   },
+  DD:  { jawOpen:0.3, mouthClose:0.2, mouthFunnel:0,   mouthPucker:0,   mouthSmile:0.1, mouthStretch:0.1,mouthPress:0,   cheekPuff:0   },
+  kk:  { jawOpen:0.4, mouthClose:0,   mouthFunnel:0,   mouthPucker:0,   mouthSmile:0,   mouthStretch:0,  mouthPress:0,   cheekPuff:0.1 },
+  CH:  { jawOpen:0.3, mouthClose:0.1, mouthFunnel:0.5, mouthPucker:0.3, mouthSmile:0,   mouthStretch:0,  mouthPress:0,   cheekPuff:0   },
+  SS:  { jawOpen:0.2, mouthClose:0.3, mouthFunnel:0.1, mouthPucker:0.1, mouthSmile:0.3, mouthStretch:0.3,mouthPress:0,   cheekPuff:0   },
+  nn:  { jawOpen:0.1, mouthClose:0.6, mouthFunnel:0,   mouthPucker:0,   mouthSmile:0,   mouthStretch:0,  mouthPress:0.2, cheekPuff:0   },
+  RR:  { jawOpen:0.3, mouthClose:0.1, mouthFunnel:0.4, mouthPucker:0.5, mouthSmile:0,   mouthStretch:0,  mouthPress:0,   cheekPuff:0   },
+  aa:  { jawOpen:0.9, mouthClose:0,   mouthFunnel:0,   mouthPucker:0,   mouthSmile:0,   mouthStretch:0.4,mouthPress:0,   cheekPuff:0   },
+  E:   { jawOpen:0.5, mouthClose:0,   mouthFunnel:0,   mouthPucker:0,   mouthSmile:0.6, mouthStretch:0.6,mouthPress:0,   cheekPuff:0   },
+  I:   { jawOpen:0.3, mouthClose:0,   mouthFunnel:0,   mouthPucker:0,   mouthSmile:0.8, mouthStretch:0.4,mouthPress:0,   cheekPuff:0   },
+  O:   { jawOpen:0.6, mouthClose:0,   mouthFunnel:0.6, mouthPucker:0.4, mouthSmile:0,   mouthStretch:0,  mouthPress:0,   cheekPuff:0   },
+  U:   { jawOpen:0.4, mouthClose:0,   mouthFunnel:0.8, mouthPucker:0.8, mouthSmile:0,   mouthStretch:0,  mouthPress:0,   cheekPuff:0   },
+};
+
+function initVisemeBtns() {
+  const cont = document.getElementById('visemeBtns');
+  VISEME_IDS.forEach(id => {
+    const b = document.createElement('button');
+    b.className = 'vbtn';
+    b.id = 'vbtn-' + id;
+    b.textContent = id;
+    b.onclick = () => applyViseme(id);
+    cont.appendChild(b);
+  });
+}
+
+function applyViseme(id) {
+  const bs = VISEME_BS[id];
+  if (!bs) return;
+  Object.assign(morphTarget, bs);
+  document.querySelectorAll('.vbtn').forEach(b => b.classList.remove('active'));
+  document.getElementById('vbtn-'+id)?.classList.add('active');
+  syncBSSliders();
+  visemeCount++;
+}
+
+function syncBSSliders() {
+  Object.keys(morphTarget).forEach(k => {
+    const sl = document.getElementById('bs-'+k);
+    const vl = document.getElementById('bsc-'+k);
+    if (sl) sl.value = Math.round(morphTarget[k]*100);
+    if (vl) vl.textContent = morphTarget[k].toFixed(2);
+  });
+}
+
+// ── Persona switcher ──────────────────────────────────────
+function initPersonaBtns() {
+  const cont = document.getElementById('personaBtns');
+  PERSONAS.forEach(p => {
+    const b = document.createElement('button');
+    b.className = 'persona-btn' + (p.id===currentPersona.id?' active':'');
+    b.id = 'pb-'+p.id;
+    b.innerHTML = `<div class="persona-avatar">${p.emoji}</div>
+      <div class="persona-info"><div class="pname">${p.name}</div><div class="prole">${p.role}</div></div>`;
+    b.onclick = () => switchPersona(p);
+    cont.appendChild(b);
+  });
+}
+
+function switchPersona(p) {
+  currentPersona = p;
+  document.querySelectorAll('.persona-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('pb-'+p.id)?.classList.add('active');
+  buildAvatar(p);
+}
+
+// ── Emotion ───────────────────────────────────────────────
+function setEmotion(type) {
+  currentEmotion = type;
+  emotionTarget = { ...EMOTION_PRESETS[type] };
+  document.querySelectorAll('.emot-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('emot-'+type)?.classList.add('active');
+}
+
+// ── Apply morphs to mesh ──────────────────────────────────
+const LERP = 0.18;
+function applyMorphsToMesh(dt) {
+  // Lerp morph state toward target
+  Object.keys(morphState).forEach(k => {
+    morphState[k] += (morphTarget[k] - morphState[k]) * LERP;
+  });
+  // Lerp emotion
+  Object.keys(emotion).forEach(k => {
+    emotion[k] += (emotionTarget[k] - emotion[k]) * 0.08;
+  });
+
+  if (!jawMesh) return;
+  const jaw = morphState.jawOpen;
+  const smile = morphState.mouthSmile + emotion.smileAmt;
+  const pucker = morphState.mouthPucker;
+  const funnel = morphState.mouthFunnel;
+
+  // Jaw
+  jawMesh.position.y = -0.14 - jaw * 0.04;
+  jawMesh.rotation.x = jaw * 0.18;
+
+  // Upper lip
+  if (upperLipMesh) {
+    upperLipMesh.position.y = -0.10 + smile * 0.008;
+    upperLipMesh.scale.x = 1 + funnel * 0.08 - pucker * 0.12 + morphState.mouthStretch * 0.1;
+    upperLipMesh.scale.z = 1 + pucker * 0.3;
+  }
+
+  // Lower lip
+  if (lowerLipMesh) {
+    lowerLipMesh.position.y = -0.125 - jaw * 0.035 + smile * 0.006;
+    lowerLipMesh.scale.x = 1 + funnel * 0.08 - pucker * 0.1;
+    lowerLipMesh.scale.z = 1 + pucker * 0.25;
+  }
+
+  // Eyebrows (emotion)
+  const bh = emotion.browHeight;
+  const bf = emotion.browFurrow;
+  if (leftBrow) {
+    leftBrow.position.y = 0.115 + bh;
+    leftBrow.rotation.z = 0.12 + bf * 0.15;
+  }
+  if (rightBrow) {
+    rightBrow.position.y = 0.115 + bh;
+    rightBrow.rotation.z = -0.12 - bf * 0.15;
+  }
+
+  // Blink
+  const lidOpen = 1 - blinkAmt;
+  if (leftLid)  { leftLid.scale.y  = lidOpen * emotion.eyeOpen; }
+  if (rightLid) { rightLid.scale.y = lidOpen * emotion.eyeOpen; }
+
+  // Eye look
+  [leftEye, rightEye].forEach(e => {
+    if (e) {
+      e.rotation.y = eyeLookX * 0.5;
+      e.rotation.x = -eyeLookY * 0.5;
+    }
+  });
+
+  // Cheek puff
+  if (noseMesh) noseMesh.scale.x = 1 + morphState.cheekPuff * 0.3;
+}
+
+// ── Idle animation ────────────────────────────────────────
+function doIdle(dt) {
+  if (!idleEnabled) return;
+  idleT += dt;
+
+  // Gentle breathing / head sway
+  headYawTarget   = Math.sin(idleT * 0.4)  * 0.04 + Math.sin(idleT * 0.13) * 0.02;
+  headPitchTarget = Math.sin(idleT * 0.35) * 0.025 + Math.sin(idleT * 0.09) * 0.015;
+
+  // Blink
+  blinkT += dt;
+  if (blinkT > nextBlink) {
+    blinkT = 0;
+    nextBlink = 3 + Math.random() * 4;
+    triggerBlink();
+  }
+}
+
+let blinkAnimT = 0, blinkAnimating = false;
+function triggerBlink() {
+  if (blinkAnimating) return;
+  blinkAnimating = true;
+  blinkAnimT = 0;
+  const blinkInterval = setInterval(() => {
+    blinkAnimT += 0.016;
+    if (blinkAnimT < 0.07)       blinkAmt = blinkAnimT / 0.07;
+    else if (blinkAnimT < 0.14)  blinkAmt = 1 - (blinkAnimT - 0.07) / 0.07;
+    else { blinkAmt = 0; blinkAnimating = false; clearInterval(blinkInterval); }
+  }, 16);
+}
+
+function toggleIdle() { idleEnabled = !idleEnabled; }
+function resetPose() {
+  headYaw = headPitch = headYawTarget = headPitchTarget = 0;
+  eyeLookX = eyeLookY = 0;
+  Object.keys(morphTarget).forEach(k => morphTarget[k] = morphState[k] < 0.1 ? 0 : morphState[k]);
+  morphTarget.mouthClose = 0.8;
+  syncBSSliders();
+  ['yawSlider','pitchSlider','eyeXSlider','eyeYSlider'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = 0;
+  });
+}
+
+// ── Demo functions ────────────────────────────────────────
+const DEMO_VISEMES = ['rest','DD','aa','SS','I','nn','rest','O','U','rest','aa','DD','rest'];
+let demoIdx=0, demoTimer=null;
+
+function demoSpeak() {
+  clearTimeout(demoTimer);
+  demoIdx = 0;
+  isAvatarSpeaking = true;
+  document.getElementById('speakingIndicator').classList.remove('silent');
+  function next() {
+    if (demoIdx >= DEMO_VISEMES.length) {
+      applyViseme('rest');
+      isAvatarSpeaking = false;
+      document.getElementById('speakingIndicator').classList.add('silent');
+      return;
+    }
+    applyViseme(DEMO_VISEMES[demoIdx++]);
+    demoTimer = setTimeout(next, 120 + Math.random()*60);
+  }
+  next();
+}
+
+function demoFullSentence() {
+  const sentence = "I am not convinced by the data you have presented today.";
+  const phonemeSeq = ['rest','I','rest','aa','nn','rest','nn','O','DD','rest',
+    'kk','nn','V','I','nn','SS','DD','rest','PP','aa','I','rest','DD','aa','DD','aa','rest',
+    'U','rest','H','aa','V','rest','PP','RR','I','SS','E','nn','DD','rest','DD','aa','I',rest];
+  let i = 0;
+  isAvatarSpeaking = true;
+  document.getElementById('speakingIndicator').classList.remove('silent');
+  function next() {
+    if (i >= phonemeSeq.length) {
+      applyViseme('rest');
+      isAvatarSpeaking = false;
+      document.getElementById('speakingIndicator').classList.add('silent');
+      return;
+    }
+    applyViseme(phonemeSeq[i++] || 'DD');
+    setTimeout(next, 90 + Math.random()*50);
+  }
+  next();
+  // Also speak it
+  if (window.speechSynthesis) {
+    const u = new SpeechSynthesisUtterance(sentence);
+    u.rate = 0.9;
+    speechSynthesis.speak(u);
+  }
+}
+
+// ── Render loop ───────────────────────────────────────────
+let lastTime = 0, frameCount = 0, fpsT = 0;
+
+function animate(ts) {
+  requestAnimationFrame(animate);
+  const dt = Math.min((ts - lastTime) / 1000, 0.05);
+  lastTime = ts;
+
+  resizeRenderer();
+
+  // Head rotation
+  headYaw   += (headYawTarget   - headYaw)   * 0.08;
+  headPitch += (headPitchTarget - headPitch) * 0.08;
+  avatarGroup.rotation.y = headYaw;
+  avatarGroup.rotation.x = headPitch;
+
+  doIdle(dt);
+  applyMorphsToMesh(dt);
+
+  // FPS
+  frameCount++;
+  fpsT += dt;
+  if (fpsT > 0.5) {
+    document.getElementById('statFps').textContent = Math.round(frameCount / fpsT);
+    frameCount = 0; fpsT = 0;
+    // VPS
+    const now = Date.now();
+    const elapsed = (now - lastVpsT) / 1000;
+    if (elapsed > 0) {
+      document.getElementById('statVps').textContent = Math.round(visemeCount / elapsed);
+      visemeCount = 0; lastVpsT = now;
+    }
+  }
+
+  const t0 = performance.now();
+  renderer.render(scene, camera);
+  document.getElementById('statRms').textContent = (performance.now() - t0).toFixed(1);
+}
+
+// ── Integration callbacks ─────────────────────────────────
+window.__onViseme = function(visemeId, blendWeights, durationMs) {
+  applyViseme(visemeId);
+  isAvatarSpeaking = true;
+  document.getElementById('speakingIndicator').classList.remove('silent');
+  visemeCount++;
+  clearTimeout(window.__stopSpeakTimer);
+  window.__stopSpeakTimer = setTimeout(() => {
+    applyViseme('rest');
+    isAvatarSpeaking = false;
+    document.getElementById('speakingIndicator').classList.add('silent');
+  }, durationMs + 200);
+};
+
+window.__onEmotion = function(type) {
+  if (EMOTION_PRESETS[type]) setEmotion(type);
+};
+
+// ── Init ──────────────────────────────────────────────────
+buildAvatar(PERSONAS[0]);
+initBSControls();
+initVisemeBtns();
+initPersonaBtns();
+resizeRenderer();
+requestAnimationFrame(animate);
+</script>
+</body>
+</html>
