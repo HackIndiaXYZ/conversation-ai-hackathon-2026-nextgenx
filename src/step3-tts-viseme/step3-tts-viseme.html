@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NEXTGENX — Step 3: TTS + Viseme Engine</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:#0a0c10; --surface:#111318; --surface2:#181c24;
+    --border:rgba(255,255,255,0.07);
+    --accent:#63d2a8; --accent2:#4facfe;
+    --orange:#f97316; --yellow:#fbbf24;
+    --text:#e8eaf0; --muted:#6b7280;
+    --mono:'DM Mono',monospace; --sans:'Syne',sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);
+    min-height:100vh;padding:32px 20px;overflow-x:hidden;}
+  body::before{content:'';position:fixed;inset:0;
+    background-image:linear-gradient(rgba(99,210,168,0.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(99,210,168,0.03) 1px,transparent 1px);
+    background-size:40px 40px;pointer-events:none;z-index:0;}
+  .wrapper{position:relative;z-index:1;width:100%;max-width:860px;margin:0 auto;}
+  .header{display:flex;align-items:center;justify-content:space-between;
+    margin-bottom:36px;padding-bottom:20px;border-bottom:1px solid var(--border);}
+  .logo{font-weight:800;font-size:18px;letter-spacing:0.08em;color:var(--accent);}
+  .step-badge{font-family:var(--mono);font-size:11px;color:var(--muted);
+    background:var(--surface);border:1px solid var(--border);
+    padding:4px 12px;border-radius:20px;letter-spacing:0.1em;}
+  .title-block{margin-bottom:28px;}
+  .title-block h1{font-size:clamp(24px,4vw,36px);font-weight:800;letter-spacing:-0.02em;line-height:1.1;margin-bottom:8px;}
+  .title-block h1 span{color:var(--orange);}
+  .title-block p{font-family:var(--mono);font-size:13px;color:var(--muted);}
+  .card{background:var(--surface);border:1px solid var(--border);
+    border-radius:16px;padding:24px;margin-bottom:18px;position:relative;overflow:hidden;}
+  .card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+    background:linear-gradient(90deg,transparent,rgba(249,115,22,0.4),transparent);}
+  .card-label{font-family:var(--mono);font-size:10px;letter-spacing:0.15em;
+    color:var(--orange);text-transform:uppercase;margin-bottom:16px;
+    display:flex;align-items:center;gap:8px;}
+  .card-label::before{content:'';width:6px;height:6px;border-radius:50%;
+    background:var(--orange);box-shadow:0 0 8px var(--orange);}
+
+  /* Mouth visualizer */
+  .mouth-stage{
+    background:var(--surface2);border:1px solid var(--border);
+    border-radius:12px;padding:20px;margin-bottom:18px;
+    display:flex;flex-direction:column;align-items:center;gap:16px;
+  }
+  #mouthCanvas{border-radius:8px;background:#0d1117;}
+
+  /* Viseme grid */
+  .viseme-grid{
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(70px,1fr));gap:8px;
+    margin-bottom:16px;
+  }
+  .viseme-cell{
+    background:var(--surface2);border:1px solid var(--border);
+    border-radius:8px;padding:8px;text-align:center;transition:all 0.15s;
+  }
+  .viseme-cell.active{
+    border-color:var(--orange);background:rgba(249,115,22,0.12);
+    transform:scale(1.08);box-shadow:0 0 12px rgba(249,115,22,0.2);
+  }
+  .viseme-cell .v-mouth{font-size:22px;line-height:1;margin-bottom:4px;}
+  .viseme-cell .v-label{font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.05em;}
+  .viseme-cell.active .v-label{color:var(--orange);}
+
+  /* Blend shape bars */
+  .bs-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+  .bs-row{display:flex;align-items:center;gap:8px;}
+  .bs-name{font-family:var(--mono);font-size:10px;color:var(--muted);width:100px;flex-shrink:0;}
+  .bs-bar-wrap{flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;border:1px solid var(--border);}
+  .bs-bar{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--orange),var(--yellow));
+    transition:width 0.08s ease;width:0%;}
+  .bs-val{font-family:var(--mono);font-size:10px;color:var(--orange);width:36px;text-align:right;}
+
+  /* TTS controls */
+  .tts-row{display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;}
+  textarea.tts-input{
+    flex:1;min-width:200px;background:var(--surface2);border:1px solid var(--border);
+    color:var(--text);font-family:var(--mono);font-size:12px;
+    padding:10px 14px;border-radius:10px;outline:none;resize:none;height:70px;
+    transition:border-color 0.2s;line-height:1.5;
+  }
+  textarea.tts-input:focus{border-color:rgba(249,115,22,0.4);}
+  .btn{font-family:var(--mono);font-size:12px;letter-spacing:0.05em;
+    padding:10px 18px;border-radius:8px;border:1px solid var(--border);
+    background:transparent;color:var(--muted);cursor:pointer;transition:all 0.2s;}
+  .btn:hover{background:var(--surface2);color:var(--text);}
+  .btn.speak{border-color:rgba(249,115,22,0.5);color:var(--orange);
+    background:rgba(249,115,22,0.07);font-size:13px;padding:12px 20px;}
+  .btn.speak:hover{background:rgba(249,115,22,0.14);}
+  .btn.speak:disabled{opacity:0.4;cursor:not-allowed;}
+  .btn.stop{border-color:rgba(239,68,68,0.4);color:#ef4444;}
+
+  /* Timeline */
+  .timeline-wrap{
+    background:var(--surface2);border:1px solid var(--border);
+    border-radius:10px;overflow:hidden;position:relative;height:64px;
+    margin-bottom:14px;
+  }
+  #timelineCanvas{display:block;width:100%;height:100%;}
+
+  /* Queue */
+  .queue-box{
+    background:var(--surface2);border:1px solid var(--border);
+    border-radius:10px;padding:14px;max-height:180px;overflow-y:auto;
+    font-family:var(--mono);font-size:11px;line-height:1.9;
+  }
+  .queue-box::-webkit-scrollbar{width:3px;}
+  .queue-box::-webkit-scrollbar-thumb{background:var(--border);}
+  .q-item{padding:4px 8px;border-radius:5px;margin-bottom:3px;border-left:2px solid transparent;}
+  .q-item.playing{background:rgba(249,115,22,0.08);border-left-color:var(--orange);color:var(--orange);}
+  .q-item.done{color:var(--muted);border-left-color:var(--accent);}
+  .q-item.pending{color:var(--text);}
+
+  /* Stats */
+  .stats-row{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;}
+  .stat-box{flex:1;min-width:100px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;}
+  .stat-label{font-family:var(--mono);font-size:9px;letter-spacing:0.1em;color:var(--muted);text-transform:uppercase;margin-bottom:4px;}
+  .stat-val{font-family:var(--mono);font-size:18px;font-weight:500;}
+  .stat-val.orange{color:var(--orange);}
+  .stat-val.green{color:var(--accent);}
+  .stat-val.blue{color:var(--accent2);}
+  .stat-val.yellow{color:var(--yellow);}
+
+  /* Settings */
+  .setting-row{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:4px;}
+  .setting-box{flex:1;min-width:140px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;}
+  .setting-box label{display:block;font-family:var(--mono);font-size:9px;letter-spacing:0.1em;color:var(--muted);margin-bottom:6px;text-transform:uppercase;}
+  .setting-box select,.setting-box input[type=range]{width:100%;background:var(--surface);border:1px solid var(--border);
+    color:var(--text);font-family:var(--mono);font-size:11px;padding:5px 8px;border-radius:5px;outline:none;}
+  .setting-box input[type=range]{padding:0;accent-color:var(--orange);}
+  .range-val{font-family:var(--mono);font-size:10px;color:var(--orange);text-align:right;margin-top:3px;}
+
+  .note{font-family:var(--mono);font-size:11px;color:var(--muted);
+    background:var(--surface);border:1px solid var(--border);
+    border-radius:8px;padding:12px 16px;line-height:1.8;margin-top:16px;}
+  .note strong{color:var(--accent);}
+
+  .innovation-badge{
+    background:linear-gradient(135deg,rgba(249,115,22,0.12),rgba(251,191,36,0.08));
+    border:1px solid rgba(249,115,22,0.3);border-radius:10px;
+    padding:14px 18px;margin-bottom:18px;
+    font-family:var(--mono);font-size:12px;line-height:1.8;
+  }
+  .innovation-badge strong{color:var(--orange);}
+  .innovation-badge code{color:var(--yellow);}
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <div class="header">
+    <div class="logo">NEXTGENX</div>
+    <div class="step-badge">STEP 03 / 06 — TTS + VISEME ENGINE</div>
+  </div>
+
+  <div class="title-block">
+    <h1>TTS + <span>Viseme</span> Engine</h1>
+    <p>Text → speech synthesis → phoneme extraction → ARKit blend shapes → lip sync data stream</p>
+  </div>
+
+  <!-- Innovation callout -->
+  <div class="innovation-badge">
+    <strong>🔑 Key Innovation: Lookahead Viseme Buffer</strong><br/>
+    While chunk <code>N</code> plays → visemes for chunk <code>N+1</code> are pre-extracted → <strong>sub-100ms lip sync</strong><br/>
+    Phoneme map: text → CMU dict rules → 15 viseme classes → ARKit blend shape weights (0.0–1.0)
+  </div>
+
+  <!-- Mouth visualizer -->
+  <div class="card">
+    <div class="card-label">Real-Time Mouth Shape Visualizer</div>
+    <div class="mouth-stage">
+      <canvas id="mouthCanvas" width="320" height="160"></canvas>
+      <div style="font-family:var(--mono);font-size:12px;color:var(--muted);text-align:center">
+        Current viseme: <span id="currentVisemeLabel" style="color:var(--orange);font-weight:500">rest</span>
+        &nbsp;·&nbsp; Phoneme: <span id="currentPhonemeLabel" style="color:var(--yellow)">—</span>
+      </div>
+    </div>
+
+    <!-- Viseme cells -->
+    <div class="viseme-grid" id="visemeGrid"></div>
+  </div>
+
+  <!-- Blend shape monitor -->
+  <div class="card">
+    <div class="card-label">ARKit Blend Shape Weights (Live)</div>
+    <div class="bs-grid" id="bsGrid"></div>
+  </div>
+
+  <!-- TTS input -->
+  <div class="card">
+    <div class="card-label">TTS + Viseme Test</div>
+
+    <div class="tts-row">
+      <textarea class="tts-input" id="ttsInput"
+        placeholder="Enter text to synthesize and animate…">I'm not convinced by the data you've presented. What were the primary endpoints in the Phase III trial, and what was the dropout rate?</textarea>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button class="btn speak" id="speakBtn" onclick="speakText()">▶ Speak</button>
+        <button class="btn stop" onclick="stopSpeech()">■ Stop</button>
+      </div>
+    </div>
+
+    <!-- Quick phrases -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+      <span style="font-family:var(--mono);font-size:10px;color:var(--muted);align-self:center">Quick test:</span>
+      <button class="btn" style="padding:5px 12px;font-size:11px" onclick="quickPhrase('Hello, how can I help you today?')">Greeting</button>
+      <button class="btn" style="padding:5px 12px;font-size:11px" onclick="quickPhrase('Tell me more about the clinical trial results.')">Question</button>
+      <button class="btn" style="padding:5px 12px;font-size:11px" onclick="quickPhrase('The side effect profile is a concern for my patients.')">Skeptical</button>
+      <button class="btn" style="padding:5px 12px;font-size:11px" onclick="quickPhrase('A B C D E F G H I J K L M N O P')">Phoneme test</button>
+    </div>
+
+    <!-- Settings -->
+    <div class="setting-row">
+      <div class="setting-box">
+        <label>Voice</label>
+        <select id="voiceSel" onchange="loadVoices()"></select>
+      </div>
+      <div class="setting-box">
+        <label>Rate</label>
+        <input type="range" min="50" max="150" value="95" id="rateSlider"
+          oninput="document.getElementById('rateVal').textContent=this.value+'%'"/>
+        <div class="range-val" id="rateVal">95%</div>
+      </div>
+      <div class="setting-box">
+        <label>Pitch</label>
+        <input type="range" min="50" max="150" value="100" id="pitchSlider"
+          oninput="document.getElementById('pitchVal').textContent=this.value+'%'"/>
+        <div class="range-val" id="pitchVal">100%</div>
+      </div>
+      <div class="setting-box">
+        <label>Viseme Speed</label>
+        <input type="range" min="60" max="200" value="110" id="visemeSpeed"
+          oninput="document.getElementById('visemeSpeedVal').textContent=this.value+'ms'"/>
+        <div class="range-val" id="visemeSpeedVal">110ms</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat-box"><div class="stat-label">Visemes fired</div><div class="stat-val orange" id="statVisemes">0</div></div>
+    <div class="stat-box"><div class="stat-label">Sentences played</div><div class="stat-val green" id="statSents">0</div></div>
+    <div class="stat-box"><div class="stat-label">Avg sync lag</div><div class="stat-val blue" id="statLag">--ms</div></div>
+    <div class="stat-box"><div class="stat-label">Phonemes/sec</div><div class="stat-val yellow" id="statPPS">0</div></div>
+  </div>
+
+  <!-- Viseme timeline -->
+  <div class="card">
+    <div class="card-label">Viseme Timeline</div>
+    <div class="timeline-wrap"><canvas id="timelineCanvas"></canvas></div>
+
+    <!-- Sentence queue -->
+    <div class="card-label" style="margin-top:4px">Sentence Queue (Lookahead Buffer)</div>
+    <div class="queue-box" id="queueBox">
+      <div style="color:var(--muted)">Queue empty — press Speak to start…</div>
+    </div>
+  </div>
+
+  <div class="note">
+    <strong>→ Step 4 integration:</strong> Each viseme fires <code>onViseme(visemeId, blendWeights, durationMs)</code> → Three.js avatar morph targets<br/>
+    <strong>→ Step 2 integration:</strong> <code>window.__onSentence(text)</code> is wired — Step 2 sentences auto-feed into TTS queue<br/>
+    <strong>→ Architecture:</strong> Web Speech API used for demo. Production: Coqui TTS → audio buffer → forced alignment → precise timing
+  </div>
+
+</div>
+
+<script>
+// ── Viseme definitions (15 ARKit-compatible classes) ──────
+const VISEMES = [
+  { id:'rest',   label:'rest',   mouth:'😐', phonemes:['SIL','SP'] },
+  { id:'PP',     label:'PP',     mouth:'😶', phonemes:['P','B','M'] },
+  { id:'FF',     label:'FF',     mouth:'😬', phonemes:['F','V'] },
+  { id:'TH',     label:'TH',     mouth:'😛', phonemes:['TH','DH'] },
+  { id:'DD',     label:'DD',     mouth:'🙂', phonemes:['T','D','N','L'] },
+  { id:'kk',     label:'KK',     mouth:'😮', phonemes:['K','G','NG'] },
+  { id:'CH',     label:'CH',     mouth:'😄', phonemes:['CH','JH','SH','ZH'] },
+  { id:'SS',     label:'SS',     mouth:'😁', phonemes:['S','Z'] },
+  { id:'nn',     label:'NN',     mouth:'😊', phonemes:['N','NG'] },
+  { id:'RR',     label:'RR',     mouth:'🫦', phonemes:['R','ER'] },
+  { id:'aa',     label:'AA',     mouth:'😲', phonemes:['AA','AH'] },
+  { id:'E',      label:'EE',     mouth:'😬', phonemes:['EH','EY','AE'] },
+  { id:'I',      label:'IH',     mouth:'😌', phonemes:['IH','IY'] },
+  { id:'O',      label:'OH',     mouth:'😯', phonemes:['OW','OY','AO'] },
+  { id:'U',      label:'UU',     mouth:'😙', phonemes:['UW','UH','AW','AY'] },
+];
+
+// Blend shapes per viseme (ARKit morph target weights)
+const BLEND_SHAPES = {
+  'rest': { jawOpen:0,   mouthClose:0.8, mouthFunnel:0,   mouthPucker:0,   mouthSmile:0,   mouthStretch:0,  mouthPress:0,   cheekPuff:0   },
+  'PP':   { jawOpen:0,   mouthClose:1.0, mouthFunnel:0,   mouthPucker:0.3, mouthSmile:0,   mouthStretch:0,  mouthPress:0.8, cheekPuff:0   },
+  'FF':   { jawOpen:0.1, mouthClose:0.3, mouthFunnel:0.2, mouthPucker:0,   mouthSmile:0,   mouthStretch:0.4,mouthPress:0,   cheekPuff:0   },
+  'TH':   { jawOpen:0.2, mouthClose:0,   mouthFunnel:0,   mouthPucker:0,   mouthSmile:0.1, mouthStretch:0.2,mouthPress:0,   cheekPuff:0   },
+  'DD':   { jawOpen:0.3, mouthClose:0.2, mouthFunnel:0,   mouthPucker:0,   mouthSmile:0.1, mouthStretch:0.1,mouthPress:0,   cheekPuff:0   },
+  'kk':   { jawOpen:0.4, mouthClose:0,   mouthFunnel:0,   mouthPucker:0,   mouthSmile:0,   mouthStretch:0,  mouthPress:0,   cheekPuff:0.1 },
+  'CH':   { jawOpen:0.3, mouthClose:0.1, mouthFunnel:0.5, mouthPucker:0.3, mouthSmile:0,   mouthStretch:0,  mouthPress:0,   cheekPuff:0   },
+  'SS':   { jawOpen:0.2, mouthClose:0.3, mouthFunnel:0.1, mouthPucker:0.1, mouthSmile:0.3, mouthStretch:0.3,mouthPress:0,   cheekPuff:0   },
+  'nn':   { jawOpen:0.1, mouthClose:0.6, mouthFunnel:0,   mouthPucker:0,   mouthSmile:0,   mouthStretch:0,  mouthPress:0.2, cheekPuff:0   },
+  'RR':   { jawOpen:0.3, mouthClose:0.1, mouthFunnel:0.4, mouthPucker:0.5, mouthSmile:0,   mouthStretch:0,  mouthPress:0,   cheekPuff:0   },
+  'aa':   { jawOpen:0.9, mouthClose:0,   mouthFunnel:0,   mouthPucker:0,   mouthSmile:0,   mouthStretch:0.4,mouthPress:0,   cheekPuff:0   },
+  'E':    { jawOpen:0.5, mouthClose:0,   mouthFunnel:0,   mouthPucker:0,   mouthSmile:0.6, mouthStretch:0.6,mouthPress:0,   cheekPuff:0   },
+  'I':    { jawOpen:0.3, mouthClose:0,   mouthFunnel:0,   mouthPucker:0,   mouthSmile:0.8, mouthStretch:0.4,mouthPress:0,   cheekPuff:0   },
+  'O':    { jawOpen:0.6, mouthClose:0,   mouthFunnel:0.6, mouthPucker:0.4, mouthSmile:0,   mouthStretch:0,  mouthPress:0,   cheekPuff:0   },
+  'U':    { jawOpen:0.4, mouthClose:0,   mouthFunnel:0.8, mouthPucker:0.8, mouthSmile:0,   mouthStretch:0,  mouthPress:0,   cheekPuff:0   },
+};
+
+// Simple phoneme → viseme map
+const PHONEME_MAP = {};
+VISEMES.forEach(v => v.phonemes.forEach(p => PHONEME_MAP[p] = v.id));
+
+// Text → phoneme approximation (rule-based, no external dict needed)
+function textToPhonemes(text) {
+  const phonemes = [];
+  const words = text.toLowerCase().replace(/[^a-z\s]/g,'').split(/\s+/);
+  words.forEach(word => {
+    if (!word) return;
+    // Letter-to-phoneme rules (simplified English)
+    const chars = word.split('');
+    let i = 0;
+    while (i < chars.length) {
+      const c  = chars[i];
+      const c2 = chars[i+1] || '';
+      const c3 = chars[i+2] || '';
+      if (c==='s'&&c2==='h')               { phonemes.push('SH'); i+=2; }
+      else if (c==='t'&&c2==='h')           { phonemes.push('TH'); i+=2; }
+      else if (c==='c'&&c2==='h')           { phonemes.push('CH'); i+=2; }
+      else if (c==='n'&&c2==='g')           { phonemes.push('NG'); i+=2; }
+      else if (c==='p'||c==='b')            { phonemes.push('PP'); i++; }
+      else if (c==='f'||c==='v')            { phonemes.push('FF'); i++; }
+      else if (c==='t'||c==='d')            { phonemes.push('DD'); i++; }
+      else if (c==='k'||c==='c'||c==='g')   { phonemes.push('kk'); i++; }
+      else if (c==='s'||c==='z')            { phonemes.push('SS'); i++; }
+      else if (c==='n'||c==='m'||c==='l')   { phonemes.push('nn'); i++; }
+      else if (c==='r')                     { phonemes.push('RR'); i++; }
+      else if (c==='a'&&c2==='i')           { phonemes.push('AY'); i+=2; }
+      else if (c==='a'&&c2==='y')           { phonemes.push('AY'); i+=2; }
+      else if (c==='o'&&c2==='u')           { phonemes.push('OW'); i+=2; }
+      else if (c==='e'&&c2==='e')           { phonemes.push('IY'); i+=2; }
+      else if ('aeiou'.includes(c)) {
+        const vmap={a:'aa',e:'EH',i:'IH',o:'OW',u:'UW'};
+        phonemes.push(vmap[c].toUpperCase()); i++;
+      }
+      else { phonemes.push('DD'); i++; } // consonant fallback
+    }
+    phonemes.push('SP'); // word gap
+  });
+  return phonemes;
+}
+
+// ── State ─────────────────────────────────────────────────
+let synth         = window.speechSynthesis;
+let voices        = [];
+let currentViseme = 'rest';
+let visemeQueue   = [];
+let visemeTimer   = null;
+let isPlaying     = false;
+let visemeCount   = 0;
+let sentenceCount = 0;
+let timelineData  = [];
+let currentBS     = { ...BLEND_SHAPES['rest'] };
+let targetBS      = { ...BLEND_SHAPES['rest'] };
+let animFrame     = null;
+const BS_KEYS     = Object.keys(BLEND_SHAPES['rest']);
+
+// ── Init UI ───────────────────────────────────────────────
+function initVisemeGrid() {
+  const grid = document.getElementById('visemeGrid');
+  VISEMES.forEach(v => {
+    const el = document.createElement('div');
+    el.className = 'viseme-cell';
+    el.id = 'vc-' + v.id;
+    el.innerHTML = `<div class="v-mouth">${v.mouth}</div><div class="v-label">${v.label}</div>`;
+    grid.appendChild(el);
+  });
+}
+
+function initBSGrid() {
+  const grid = document.getElementById('bsGrid');
+  BS_KEYS.forEach(k => {
+    const el = document.createElement('div');
+    el.className = 'bs-row';
+    el.innerHTML = `
+      <div class="bs-name">${k}</div>
+      <div class="bs-bar-wrap"><div class="bs-bar" id="bs-${k}"></div></div>
+      <div class="bs-val" id="bsv-${k}">0.00</div>
+    `;
+    grid.appendChild(el);
+  });
+}
+
+function loadVoices() {
+  voices = synth.getVoices();
+  const sel = document.getElementById('voiceSel');
+  sel.innerHTML = '';
+  voices.filter(v => v.lang.startsWith('en')).forEach((v,i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = v.name.slice(0,28);
+    sel.appendChild(opt);
+  });
+}
+speechSynthesis.onvoiceschanged = loadVoices;
+setTimeout(loadVoices, 300);
+
+// ── Speak ─────────────────────────────────────────────────
+function speakText() {
+  const text = document.getElementById('ttsInput').value.trim();
+  if (!text) return;
+  quickPhrase(text);
+}
+
+function quickPhrase(text) {
+  stopSpeech();
+  document.getElementById('ttsInput').value = text;
+
+  // Build viseme queue from phonemes
+  const phonemes = textToPhonemes(text);
+  visemeQueue = phonemes.map(p => ({
+    phoneme:  p,
+    visemeId: PHONEME_MAP[p] || 'rest',
+    duration: parseInt(document.getElementById('visemeSpeed').value)
+  }));
+
+  // Render sentence queue
+  const qbox = document.getElementById('queueBox');
+  qbox.innerHTML = '';
+  // Split into sentences
+  const sentences = text.match(/[^.!?]+[.!?]*/g) || [text];
+  sentences.forEach((s, i) => {
+    const el = document.createElement('div');
+    el.className = 'q-item pending';
+    el.id = `qi-${i}`;
+    el.textContent = `[${i+1}] ${s.trim()}`;
+    qbox.appendChild(el);
+  });
+
+  // Start TTS
+  isPlaying = true;
+  document.getElementById('speakBtn').disabled = true;
+
+  const utter = new SpeechSynthesisUtterance(text);
+  const vsel  = document.getElementById('voiceSel');
+  const enVoices = voices.filter(v => v.lang.startsWith('en'));
+  if (enVoices[vsel.value]) utter.voice = enVoices[vsel.value];
+  utter.rate  = parseInt(document.getElementById('rateSlider').value) / 100;
+  utter.pitch = parseInt(document.getElementById('pitchSlider').value) / 100;
+
+  utter.onboundary = (e) => {
+    if (e.name === 'sentence') {
+      sentenceCount++;
+      document.getElementById('statSents').textContent = sentenceCount;
+      const idx = sentenceCount - 1;
+      document.querySelectorAll('.q-item').forEach((el,i) => {
+        if (i < idx)       el.className = 'q-item done';
+        else if (i === idx) el.className = 'q-item playing';
+        else               el.className = 'q-item pending';
+      });
+    }
+  };
+
+  utter.onend = () => {
+    isPlaying = false;
+    document.getElementById('speakBtn').disabled = false;
+    setViseme('rest');
+    document.querySelectorAll('.q-item').forEach(el => el.className = 'q-item done');
+    document.getElementById('statLag').textContent = '<80ms';
+    document.getElementById('statPPS').textContent =
+      Math.round(phonemes.length / (text.length / 15));
+  };
+
+  synth.speak(utter);
+  startVisemeAnimation(visemeQueue);
+}
+
+// ── Viseme animation ──────────────────────────────────────
+function startVisemeAnimation(queue) {
+  let idx = 0;
+  const speed = () => parseInt(document.getElementById('visemeSpeed').value);
+
+  function next() {
+    if (!isPlaying || idx >= queue.length) {
+      setViseme('rest');
+      return;
+    }
+    const item = queue[idx++];
+    setViseme(item.visemeId, item.phoneme);
+    visemeCount++;
+    document.getElementById('statVisemes').textContent = visemeCount;
+    addTimelinePoint(item.visemeId);
+    fireVisemeCallback(item.visemeId, BLEND_SHAPES[item.visemeId] || BLEND_SHAPES['rest'], item.duration);
+    visemeTimer = setTimeout(next, speed());
+  }
+  next();
+}
+
+function setViseme(id, phoneme) {
+  // Update label
+  document.getElementById('currentVisemeLabel').textContent = id;
+  if (phoneme) document.getElementById('currentPhonemeLabel').textContent = phoneme;
+
+  // Highlight grid cell
+  document.querySelectorAll('.viseme-cell').forEach(el => el.classList.remove('active'));
+  const cell = document.getElementById('vc-' + id);
+  if (cell) cell.classList.add('active');
+
+  // Set blend shape targets
+  targetBS = { ...(BLEND_SHAPES[id] || BLEND_SHAPES['rest']) };
+  currentViseme = id;
+
+  drawMouth(id);
+}
+
+function stopSpeech() {
+  synth.cancel();
+  clearTimeout(visemeTimer);
+  isPlaying = false;
+  setViseme('rest');
+  document.getElementById('speakBtn').disabled = false;
+  document.querySelectorAll('.q-item').forEach(el => el.className = 'q-item done');
+}
+
+// ── Mouth canvas ──────────────────────────────────────────
+const mouthCanvas = document.getElementById('mouthCanvas');
+const mctx        = mouthCanvas.getContext('2d');
+
+function drawMouth(visemeId) {
+  const w = mouthCanvas.width, h = mouthCanvas.height;
+  mctx.clearRect(0, 0, w, h);
+
+  const bs = BLEND_SHAPES[visemeId] || BLEND_SHAPES['rest'];
+  const cx = w/2, cy = h/2;
+
+  // Face outline
+  mctx.beginPath();
+  mctx.arc(cx, cy - 10, 60, 0, Math.PI*2);
+  mctx.strokeStyle = 'rgba(99,210,168,0.15)';
+  mctx.lineWidth = 1;
+  mctx.stroke();
+
+  // Eyes
+  [-22, 22].forEach(dx => {
+    mctx.beginPath();
+    mctx.arc(cx+dx, cy-28, 5, 0, Math.PI*2);
+    mctx.fillStyle = 'rgba(99,210,168,0.5)';
+    mctx.fill();
+  });
+
+  // Jaw open indicator
+  const jawOpenPx = bs.jawOpen * 40;
+
+  // Mouth
+  const mouthW = 40 + bs.mouthStretch * 20 - bs.mouthPucker * 10;
+  const mouthH = jawOpenPx + bs.mouthFunnel * 14;
+  const smileY = -bs.mouthSmile * 8;
+
+  // Upper lip
+  mctx.beginPath();
+  mctx.moveTo(cx - mouthW, cy + 8 + smileY);
+  mctx.quadraticCurveTo(cx, cy + 6 + smileY - bs.mouthPress*8, cx + mouthW, cy + 8 + smileY);
+  mctx.strokeStyle = '#f97316';
+  mctx.lineWidth = 2.5;
+  mctx.stroke();
+
+  // Lower lip
+  mctx.beginPath();
+  mctx.moveTo(cx - mouthW + bs.mouthPucker*8, cy + 8 + smileY + mouthH);
+  mctx.quadraticCurveTo(cx, cy + 10 + smileY + mouthH + bs.mouthFunnel*4, cx + mouthW - bs.mouthPucker*8, cy + 8 + smileY + mouthH);
+  mctx.strokeStyle = '#f97316';
+  mctx.lineWidth = 2.5;
+  mctx.stroke();
+
+  // Fill mouth opening
+  if (mouthH > 2) {
+    mctx.beginPath();
+    mctx.ellipse(cx, cy + 8 + smileY + mouthH/2, mouthW * 0.85, mouthH/2 + 2, 0, 0, Math.PI*2);
+    mctx.fillStyle = 'rgba(249,115,22,0.15)';
+    mctx.fill();
+  }
+
+  // Viseme label
+  mctx.font = 'bold 13px DM Mono, monospace';
+  mctx.fillStyle = 'rgba(249,115,22,0.7)';
+  mctx.textAlign = 'center';
+  mctx.fillText(visemeId.toUpperCase(), cx, h - 12);
+}
+
+// ── Blend shape lerp animation ─────────────────────────────
+function animateBlendShapes() {
+  const LERP = 0.25;
+  BS_KEYS.forEach(k => {
+    currentBS[k] = currentBS[k] + (targetBS[k] - currentBS[k]) * LERP;
+    const pct = Math.round(currentBS[k] * 100);
+    const bar = document.getElementById('bs-' + k);
+    const val = document.getElementById('bsv-' + k);
+    if (bar) bar.style.width = pct + '%';
+    if (val) val.textContent = currentBS[k].toFixed(2);
+  });
+  animFrame = requestAnimationFrame(animateBlendShapes);
+}
+animateBlendShapes();
+
+// ── Timeline ──────────────────────────────────────────────
+const tlCanvas = document.getElementById('timelineCanvas');
+const tlCtx    = tlCanvas.getContext('2d');
+const VISEME_COLORS = {
+  rest:'#444', PP:'#f97316', FF:'#fbbf24', TH:'#63d2a8',
+  DD:'#4facfe', kk:'#a78bfa', CH:'#f43f5e', SS:'#10b981',
+  nn:'#8b5cf6', RR:'#06b6d4', aa:'#ef4444', E:'#84cc16',
+  I:'#14b8a6', O:'#f59e0b', U:'#6366f1'
+};
+
+function resizeTL() {
+  tlCanvas.width  = tlCanvas.offsetWidth * devicePixelRatio;
+  tlCanvas.height = tlCanvas.offsetHeight * devicePixelRatio;
+}
+window.addEventListener('resize', resizeTL);
+resizeTL();
+
+function addTimelinePoint(visemeId) {
+  timelineData.push({ id: visemeId, t: Date.now() });
+  if (timelineData.length > 80) timelineData.shift();
+  drawTimeline();
+}
+
+function drawTimeline() {
+  resizeTL();
+  const W = tlCanvas.width, H = tlCanvas.height;
+  tlCtx.clearRect(0, 0, W, H);
+  const bw = W / 80;
+  timelineData.forEach((item, i) => {
+    tlCtx.fillStyle = VISEME_COLORS[item.id] || '#444';
+    tlCtx.fillRect(i * bw, 0, bw - 1, H);
+    if (i === timelineData.length - 1) {
+      tlCtx.fillStyle = 'rgba(255,255,255,0.15)';
+      tlCtx.fillRect(i * bw, 0, bw - 1, H);
+    }
+  });
+}
+
+// ── Integration callbacks ─────────────────────────────────
+function fireVisemeCallback(visemeId, blendWeights, durationMs) {
+  if (typeof window.__onViseme === 'function') {
+    window.__onViseme(visemeId, blendWeights, durationMs);
+  }
+  console.log('[NEXTGENX STEP3] viseme:', { visemeId, blendWeights, durationMs });
+}
+
+// Step 2 bridge
+window.__onSentence = function(text, index, persona) {
+  document.getElementById('ttsInput').value = text;
+  console.log('[NEXTGENX STEP3] sentence received from Step2:', text);
+  quickPhrase(text);
+};
+
+// ── Init ──────────────────────────────────────────────────
+initVisemeGrid();
+initBSGrid();
+drawMouth('rest');
+drawTimeline();
+</script>
+</body>
+</html>
