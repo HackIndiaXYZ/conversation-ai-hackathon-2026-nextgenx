@@ -1,0 +1,859 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NEXTGENX — Step 1: Voice Capture</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0a0c10;
+    --surface: #111318;
+    --surface2: #181c24;
+    --border: rgba(255,255,255,0.07);
+    --border-active: rgba(99,210,168,0.4);
+    --accent: #63d2a8;
+    --accent2: #4facfe;
+    --warn: #f97316;
+    --text: #e8eaf0;
+    --muted: #6b7280;
+    --mono: 'DM Mono', monospace;
+    --sans: 'Syne', sans-serif;
+  }
+
+  * { margin:0; padding:0; box-sizing:border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 32px 20px;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(99,210,168,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(99,210,168,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrapper { position: relative; z-index: 1; width: 100%; max-width: 780px; }
+
+  /* Header */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 36px;
+    padding-bottom: 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .logo {
+    font-family: var(--sans);
+    font-weight: 800;
+    font-size: 18px;
+    letter-spacing: 0.08em;
+    color: var(--accent);
+  }
+  .step-badge {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 4px 12px;
+    border-radius: 20px;
+    letter-spacing: 0.1em;
+  }
+  .title-block { margin-bottom: 32px; }
+  .title-block h1 {
+    font-size: clamp(26px, 4vw, 38px);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    margin-bottom: 8px;
+  }
+  .title-block h1 span { color: var(--accent); }
+  .title-block p {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--muted);
+  }
+
+  /* Main card */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(99,210,168,0.3), transparent);
+  }
+  .card-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card-label::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
+
+  /* Waveform canvas */
+  .waveform-wrap {
+    position: relative;
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    margin-bottom: 24px;
+    height: 100px;
+  }
+  #waveCanvas { display: block; width: 100%; height: 100%; }
+
+  /* VAD status bar */
+  .vad-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .vad-pill {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--surface2);
+    color: var(--muted);
+    transition: all 0.25s;
+  }
+  .vad-pill.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(99,210,168,0.08);
+  }
+  .vad-pill.speaking {
+    border-color: var(--warn);
+    color: var(--warn);
+    background: rgba(249,115,22,0.08);
+    animation: pulse-border 0.8s ease-in-out infinite;
+  }
+  @keyframes pulse-border {
+    0%,100% { box-shadow: 0 0 0 0 rgba(249,115,22,0.2); }
+    50% { box-shadow: 0 0 0 4px rgba(249,115,22,0.1); }
+  }
+  .vad-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.7;
+  }
+  .vad-pill.speaking .vad-dot { animation: blink 0.5s ease-in-out infinite; }
+  @keyframes blink { 0%,100%{opacity:0.3} 50%{opacity:1} }
+
+  .volume-bar-wrap {
+    flex: 1;
+    height: 6px;
+    background: var(--surface2);
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  #volumeBar {
+    height: 100%;
+    width: 0%;
+    border-radius: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    transition: width 0.05s;
+  }
+
+  /* Mic button */
+  .mic-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 8px;
+  }
+  .mic-btn {
+    width: 72px; height: 72px;
+    border-radius: 50%;
+    border: 2px solid var(--border);
+    background: var(--surface2);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px;
+    transition: all 0.2s;
+    position: relative;
+    outline: none;
+  }
+  .mic-btn:hover { border-color: var(--accent); transform: scale(1.05); }
+  .mic-btn.recording {
+    border-color: var(--warn);
+    background: rgba(249,115,22,0.1);
+    animation: mic-pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes mic-pulse {
+    0%,100% { box-shadow: 0 0 0 0 rgba(249,115,22,0.3); }
+    50% { box-shadow: 0 0 0 12px rgba(249,115,22,0); }
+  }
+  .mic-btn-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 8px;
+    letter-spacing: 0.05em;
+  }
+
+  /* Settings row */
+  .settings-row {
+    display: flex;
+    gap: 12px;
+    margin-top: 20px;
+    flex-wrap: wrap;
+  }
+  .setting-box {
+    flex: 1;
+    min-width: 140px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .setting-box label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+  .setting-box select, .setting-box input[type=range] {
+    width: 100%;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 6px 10px;
+    border-radius: 6px;
+    outline: none;
+    cursor: pointer;
+  }
+  .setting-box input[type=range] {
+    padding: 0;
+    accent-color: var(--accent);
+    height: 18px;
+  }
+  .range-val {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    text-align: right;
+    margin-top: 4px;
+  }
+
+  /* Transcript */
+  .transcript-card { background: var(--surface); }
+  .transcript-inner {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    min-height: 160px;
+    max-height: 280px;
+    overflow-y: auto;
+    padding: 16px;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text);
+    position: relative;
+  }
+  .transcript-inner::-webkit-scrollbar { width: 4px; }
+  .transcript-inner::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .transcript-empty {
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+    padding: 40px 0;
+  }
+
+  .utterance {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    animation: slide-in 0.25s ease;
+  }
+  .utterance.interim {
+    border-left-color: var(--warn);
+    opacity: 0.7;
+    font-style: italic;
+  }
+  @keyframes slide-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .utt-meta {
+    font-size: 10px;
+    color: var(--muted);
+    margin-bottom: 4px;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* Pipeline status */
+  .pipeline-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+  }
+  .pipe-step {
+    flex: 1;
+    min-width: 120px;
+    padding: 10px 14px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s;
+  }
+  .pipe-step.ready { color: var(--accent); border-color: rgba(99,210,168,0.3); }
+  .pipe-step.active { color: var(--warn); border-color: rgba(249,115,22,0.3); background: rgba(249,115,22,0.05); }
+  .pipe-step.done   { color: var(--accent2); border-color: rgba(79,172,254,0.3); }
+  .pipe-icon { font-size: 14px; }
+  .pipe-text { flex: 1; }
+
+  /* Action buttons */
+  .btn-row { display: flex; gap: 10px; margin-top: 16px; }
+  .btn {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .btn:hover { background: var(--surface2); color: var(--text); }
+  .btn.primary {
+    border-color: rgba(99,210,168,0.5);
+    color: var(--accent);
+    background: rgba(99,210,168,0.07);
+  }
+  .btn.primary:hover { background: rgba(99,210,168,0.14); }
+  .btn.danger {
+    border-color: rgba(249,115,22,0.4);
+    color: var(--warn);
+  }
+
+  /* Output JSON */
+  .json-out {
+    margin-top: 20px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    line-height: 1.8;
+    white-space: pre;
+    overflow-x: auto;
+  }
+  .json-key   { color: var(--accent2); }
+  .json-str   { color: var(--accent); }
+  .json-num   { color: #f9c86b; }
+  .json-bool  { color: var(--warn); }
+
+  .note {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    line-height: 1.8;
+    margin-top: 20px;
+  }
+  .note strong { color: var(--accent); }
+</style>
+</head>
+<body>
+<div class="wrapper">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo">NEXTGENX</div>
+    <div class="step-badge">STEP 01 / 06 — VOICE CAPTURE</div>
+  </div>
+
+  <div class="title-block">
+    <h1>Voice <span>Capture</span> Pipeline</h1>
+    <p>WebRTC mic · VAD · Waveform · Web Speech API · Transcript output</p>
+  </div>
+
+  <!-- Pipeline status -->
+  <div class="pipeline-row">
+    <div class="pipe-step" id="ps-mic"><span class="pipe-icon">🎙</span><span class="pipe-text">Mic access</span></div>
+    <div class="pipe-step" id="ps-vad"><span class="pipe-icon">📡</span><span class="pipe-text">VAD active</span></div>
+    <div class="pipe-step" id="ps-stt"><span class="pipe-icon">📝</span><span class="pipe-text">STT engine</span></div>
+    <div class="pipe-step" id="ps-out"><span class="pipe-icon">📤</span><span class="pipe-text">Transcript out</span></div>
+  </div>
+
+  <!-- Waveform + controls -->
+  <div class="card">
+    <div class="card-label">Audio Waveform Monitor</div>
+
+    <div class="waveform-wrap">
+      <canvas id="waveCanvas"></canvas>
+    </div>
+
+    <!-- VAD + volume -->
+    <div class="vad-row">
+      <div class="vad-pill" id="vadPill">
+        <div class="vad-dot"></div>
+        <span id="vadText">idle</span>
+      </div>
+      <div class="volume-bar-wrap">
+        <div id="volumeBar"></div>
+      </div>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--muted);min-width:40px;text-align:right" id="dbLabel">-- dB</span>
+    </div>
+
+    <!-- Mic button -->
+    <div class="mic-row">
+      <div style="text-align:center">
+        <button class="mic-btn" id="micBtn" onclick="toggleMic()">🎙</button>
+        <div class="mic-btn-label" id="micLabel">tap to start</div>
+      </div>
+    </div>
+
+    <!-- Settings -->
+    <div class="settings-row">
+      <div class="setting-box">
+        <label>VAD Threshold</label>
+        <input type="range" id="vadThresh" min="-80" max="-20" value="-50" step="1"
+               oninput="vadThreshold=+this.value; document.getElementById('vadThreshVal').textContent=this.value+'dB'"/>
+        <div class="range-val" id="vadThreshVal">-50dB</div>
+      </div>
+      <div class="setting-box">
+        <label>STT Language</label>
+        <select id="langSel" onchange="sttLang=this.value">
+          <option value="en-US">English (US)</option>
+          <option value="en-GB">English (UK)</option>
+          <option value="en-IN">English (IN)</option>
+          <option value="hi-IN">Hindi</option>
+        </select>
+      </div>
+      <div class="setting-box">
+        <label>Silence gap (ms)</label>
+        <input type="range" id="silenceGap" min="300" max="2000" value="800" step="100"
+               oninput="silenceMs=+this.value; document.getElementById('silenceVal').textContent=this.value+'ms'"/>
+        <div class="range-val" id="silenceVal">800ms</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Transcript -->
+  <div class="card transcript-card">
+    <div class="card-label">Live Transcript</div>
+    <div class="transcript-inner" id="transcriptBox">
+      <div class="transcript-empty" id="emptyMsg">Transcript will appear here once recording starts…</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn primary" onclick="copyTranscript()">Copy transcript</button>
+      <button class="btn" onclick="exportJSON()">Export JSON</button>
+      <button class="btn danger" onclick="clearTranscript()">Clear</button>
+    </div>
+
+    <div id="jsonOut" class="json-out" style="display:none"></div>
+  </div>
+
+  <!-- Integration note -->
+  <div class="note">
+    <strong>→ Step 2 integration point:</strong> Each finalised utterance fires <code>onTranscript(text, timestamp, durationMs)</code><br/>
+    <strong>→ Step 3 integration point:</strong> Raw audio chunks available via <code>onAudioChunk(Float32Array, sampleRate)</code> for Whisper Wasm<br/>
+    <strong>→ Architecture:</strong> Web Speech API used for demo speed. In production swap STT node with <code>whisper.cpp + wasm</code> (zero server cost)
+  </div>
+
+</div>
+
+<script>
+// ─── State ───────────────────────────────────────────────
+let isRecording   = false;
+let audioCtx      = null;
+let analyser      = null;
+let micStream     = null;
+let animFrame     = null;
+let recognition   = null;
+let vadThreshold  = -50;
+let silenceMs     = 800;
+let sttLang       = 'en-US';
+let utterances    = [];
+let interimEl     = null;
+let silenceTimer  = null;
+let speakingNow   = false;
+let recordStart   = null;
+
+// ─── Canvas setup ─────────────────────────────────────────
+const canvas  = document.getElementById('waveCanvas');
+const ctx     = canvas.getContext('2d');
+
+function resizeCanvas() {
+  canvas.width  = canvas.offsetWidth  * devicePixelRatio;
+  canvas.height = canvas.offsetHeight * devicePixelRatio;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// ─── Idle waveform ────────────────────────────────────────
+let idleT = 0;
+function drawIdle() {
+  resizeCanvas();
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.beginPath();
+  ctx.strokeStyle = 'rgba(99,210,168,0.2)';
+  ctx.lineWidth = 1.5;
+  for (let x=0; x<=W; x++) {
+    const y = H/2 + Math.sin((x/W)*10 + idleT)*4;
+    x===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  idleT += 0.04;
+  if (!isRecording) animFrame = requestAnimationFrame(drawIdle);
+}
+drawIdle();
+
+// ─── Live waveform ────────────────────────────────────────
+let dataArr;
+function drawLive() {
+  if (!isRecording) return;
+  resizeCanvas();
+  const W = canvas.width, H = canvas.height;
+
+  analyser.getByteTimeDomainData(dataArr);
+
+  ctx.clearRect(0,0,W,H);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(99,210,168,0.05)';
+  ctx.lineWidth = 1;
+  for (let i=1; i<4; i++) {
+    ctx.beginPath();
+    ctx.moveTo(0, H*i/4);
+    ctx.lineTo(W, H*i/4);
+    ctx.stroke();
+  }
+
+  // Waveform
+  ctx.beginPath();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = speakingNow ? '#f97316' : '#63d2a8';
+  const sliceW = W / dataArr.length;
+  let x = 0;
+  for (let i=0; i<dataArr.length; i++) {
+    const v = dataArr[i] / 128.0;
+    const y = v * H / 2;
+    i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    x += sliceW;
+  }
+  ctx.stroke();
+
+  // Volume RMS → dB
+  let sum = 0;
+  for (let i=0; i<dataArr.length; i++) {
+    const norm = (dataArr[i]-128)/128;
+    sum += norm*norm;
+  }
+  const rms  = Math.sqrt(sum/dataArr.length);
+  const db   = rms > 0 ? 20*Math.log10(rms) : -100;
+  const pct  = Math.max(0, Math.min(100, ((db+80)/60)*100));
+
+  document.getElementById('volumeBar').style.width = pct+'%';
+  document.getElementById('dbLabel').textContent   = db.toFixed(1)+' dB';
+
+  // VAD
+  const wasSpeaking = speakingNow;
+  speakingNow = db > vadThreshold;
+
+  if (speakingNow !== wasSpeaking) updateVAD(speakingNow);
+
+  animFrame = requestAnimationFrame(drawLive);
+}
+
+function updateVAD(speaking) {
+  const pill = document.getElementById('vadPill');
+  const txt  = document.getElementById('vadText');
+  if (speaking) {
+    pill.className = 'vad-pill speaking';
+    txt.textContent = 'voice detected';
+    setPipeStep('ps-vad','active');
+    if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer=null; }
+  } else {
+    pill.className = 'vad-pill active';
+    txt.textContent = 'silence';
+    setPipeStep('ps-vad','ready');
+  }
+}
+
+// ─── Pipeline step helper ─────────────────────────────────
+function setPipeStep(id, state) {
+  const el = document.getElementById(id);
+  el.className = 'pipe-step ' + state;
+}
+
+// ─── Toggle mic ───────────────────────────────────────────
+async function toggleMic() {
+  if (isRecording) stopRecording();
+  else await startRecording();
+}
+
+async function startRecording() {
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+    setPipeStep('ps-mic','ready');
+  } catch(e) {
+    alert('Microphone permission denied. Please allow mic access.');
+    return;
+  }
+
+  audioCtx  = new (window.AudioContext || window.webkitAudioContext)();
+  analyser  = audioCtx.createAnalyser();
+  analyser.fftSize = 2048;
+  dataArr   = new Uint8Array(analyser.fftSize);
+
+  const source = audioCtx.createMediaStreamSource(micStream);
+  source.connect(analyser);
+
+  isRecording = true;
+  recordStart = Date.now();
+
+  document.getElementById('micBtn').classList.add('recording');
+  document.getElementById('micBtn').textContent = '⏹';
+  document.getElementById('micLabel').textContent = 'recording…';
+
+  document.getElementById('vadPill').className = 'vad-pill active';
+  document.getElementById('vadText').textContent = 'listening';
+
+  cancelAnimationFrame(animFrame);
+  drawLive();
+  startSTT();
+
+  setPipeStep('ps-stt','active');
+}
+
+function stopRecording() {
+  isRecording = false;
+  if (micStream) micStream.getTracks().forEach(t=>t.stop());
+  if (audioCtx)  audioCtx.close();
+  if (recognition) recognition.stop();
+  cancelAnimationFrame(animFrame);
+
+  document.getElementById('micBtn').classList.remove('recording');
+  document.getElementById('micBtn').textContent = '🎙';
+  document.getElementById('micLabel').textContent = 'tap to start';
+  document.getElementById('vadPill').className  = 'vad-pill';
+  document.getElementById('vadText').textContent = 'idle';
+  document.getElementById('volumeBar').style.width = '0%';
+  document.getElementById('dbLabel').textContent = '-- dB';
+
+  setPipeStep('ps-mic','done');
+  setPipeStep('ps-vad','done');
+  setPipeStep('ps-stt','done');
+
+  drawIdle();
+}
+
+// ─── Web Speech API STT ───────────────────────────────────
+function startSTT() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    addUtterance('[Web Speech API not available in this browser. Use Chrome.]', true);
+    return;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.lang          = sttLang;
+  recognition.interimResults = true;
+  recognition.continuous    = true;
+  recognition.maxAlternatives = 1;
+
+  recognition.onresult = (e) => {
+    const idx = e.resultIndex;
+    const result = e.results[idx];
+    const text = result[0].transcript.trim();
+    const isFinal = result.isFinal;
+
+    if (isFinal) {
+      removeInterim();
+      if (text.length > 0) {
+        const ts = new Date().toLocaleTimeString();
+        const dur = Date.now() - recordStart;
+        addUtterance(text, false, ts, dur);
+        fireTranscriptCallback(text, ts, dur);
+        setPipeStep('ps-out','done');
+        setTimeout(()=>setPipeStep('ps-out','ready'),1200);
+      }
+    } else {
+      showInterim(text);
+    }
+  };
+
+  recognition.onerror = (e) => {
+    if (e.error !== 'no-speech' && e.error !== 'aborted') {
+      console.warn('STT error:', e.error);
+    }
+  };
+
+  recognition.onend = () => {
+    if (isRecording) {
+      setTimeout(()=>{ if(isRecording) recognition.start(); }, 200);
+    }
+  };
+
+  recognition.start();
+  setPipeStep('ps-stt','ready');
+}
+
+// ─── Transcript DOM helpers ────────────────────────────────
+function addUtterance(text, isInterim, ts, dur) {
+  const box = document.getElementById('transcriptBox');
+  document.getElementById('emptyMsg')?.remove();
+
+  const el = document.createElement('div');
+  el.className = isInterim ? 'utterance interim' : 'utterance';
+  if (isInterim) {
+    el.id = 'interim-utt';
+    el.innerHTML = `<div class="utt-meta"><span>interim</span></div>${text}`;
+  } else {
+    const obj = { id: utterances.length+1, text, timestamp: ts, durationMs: dur };
+    utterances.push(obj);
+    el.innerHTML = `<div class="utt-meta">
+      <span>#${obj.id} · ${ts}</span>
+      <span>${dur ? Math.round(dur/1000)+'s elapsed' : ''}</span>
+    </div>${text}`;
+  }
+  box.appendChild(el);
+  box.scrollTop = box.scrollHeight;
+}
+
+function showInterim(text) {
+  const existing = document.getElementById('interim-utt');
+  if (existing) {
+    existing.childNodes[1] && (existing.lastChild.textContent = text);
+  } else {
+    addUtterance(text, true);
+  }
+}
+
+function removeInterim() {
+  document.getElementById('interim-utt')?.remove();
+}
+
+// ─── Integration callbacks (stub for next steps) ─────────
+function fireTranscriptCallback(text, ts, durMs) {
+  // Step 2 will subscribe here: window.__onTranscript(text, ts, durMs)
+  if (typeof window.__onTranscript === 'function') {
+    window.__onTranscript(text, ts, durMs);
+  }
+  console.log('[NEXTGENX STEP1] transcript:', { text, ts, durMs });
+}
+
+// ─── UI actions ────────────────────────────────────────────
+function clearTranscript() {
+  utterances = [];
+  document.getElementById('transcriptBox').innerHTML =
+    '<div class="transcript-empty" id="emptyMsg">Transcript will appear here once recording starts…</div>';
+  document.getElementById('jsonOut').style.display = 'none';
+  setPipeStep('ps-out','');
+}
+
+function copyTranscript() {
+  const text = utterances.map(u=>u.text).join('\n');
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(()=>{
+    const btn = event.target;
+    btn.textContent = 'Copied!';
+    setTimeout(()=>btn.textContent='Copy transcript', 1500);
+  });
+}
+
+function exportJSON() {
+  const out = {
+    session: {
+      started: new Date().toISOString(),
+      language: document.getElementById('langSel').value,
+      vadThreshold,
+      silenceGap: silenceMs,
+    },
+    utterances
+  };
+  const el = document.getElementById('jsonOut');
+  el.style.display = 'block';
+  el.innerHTML = syntaxHighlight(JSON.stringify(out, null, 2));
+}
+
+function syntaxHighlight(json) {
+  return json
+    .replace(/(".*?")(?=\s*:)/g, '<span class="json-key">$1</span>')
+    .replace(/:\s*(".*?")/g, ': <span class="json-str">$1</span>')
+    .replace(/:\s*(\d+\.?\d*)/g, ': <span class="json-num">$1</span>')
+    .replace(/:\s*(true|false)/g, ': <span class="json-bool">$1</span>');
+}
+
+// ─── Initial pipeline state ────────────────────────────────
+['ps-mic','ps-vad','ps-stt','ps-out'].forEach(id => setPipeStep(id,''));
+</script>
+</body>
+</html>
