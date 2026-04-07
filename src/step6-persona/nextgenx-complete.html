@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>NEXTGENX — Complete Avatar System</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --bg:#080b10; --surface:#0f1318; --surface2:#161b24; --surface3:#1c2230;
+  --border:rgba(255,255,255,0.06); --border2:rgba(255,255,255,0.1);
+  --accent:#00e5a0; --accent2:#4facfe; --purple:#a78bfa;
+  --orange:#f97316; --pink:#f472b6; --yellow:#fbbf24;
+  --text:#e8edf5; --muted:#5a6478; --muted2:#8892a4;
+  --mono:'DM Mono',monospace; --sans:'Syne',sans-serif;
+  --red:#ef4444;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{height:100%;overflow:hidden;}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);display:flex;flex-direction:column;}
+
+/* Grid noise texture */
+body::before{
+  content:'';position:fixed;inset:0;
+  background-image:
+    linear-gradient(rgba(0,229,160,0.025) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,229,160,0.025) 1px,transparent 1px);
+  background-size:32px 32px;pointer-events:none;z-index:0;
+}
+
+/* ── TOP BAR ── */
+.topbar{
+  position:relative;z-index:10;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:10px 20px;
+  border-bottom:1px solid var(--border);
+  background:rgba(8,11,16,0.95);
+  backdrop-filter:blur(12px);
+  flex-shrink:0;
+}
+.topbar-left{display:flex;align-items:center;gap:16px;}
+.logo{font-weight:800;font-size:16px;letter-spacing:0.1em;color:var(--accent);}
+.version{font-family:var(--mono);font-size:10px;color:var(--muted);
+  background:var(--surface2);border:1px solid var(--border);
+  padding:3px 8px;border-radius:10px;}
+.pipeline-steps{display:flex;gap:6px;}
+.pipe-dot{
+  font-family:var(--mono);font-size:9px;letter-spacing:0.08em;
+  padding:3px 10px;border-radius:10px;border:1px solid var(--border);
+  color:var(--muted);background:var(--surface2);transition:all 0.3s;
+}
+.pipe-dot.active{border-color:var(--accent);color:var(--accent);background:rgba(0,229,160,0.08);}
+.pipe-dot.done  {border-color:rgba(0,229,160,0.3);color:rgba(0,229,160,0.6);}
+
+.topbar-right{display:flex;align-items:center;gap:10px;}
+.api-badge{
+  font-family:var(--mono);font-size:10px;
+  padding:4px 10px;border-radius:8px;
+  border:1px solid var(--border);background:var(--surface2);color:var(--muted);
+  display:flex;align-items:center;gap:6px;
+}
+.api-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--muted);}
+.api-badge.connected .dot{background:var(--accent);box-shadow:0 0 6px var(--accent);}
+.api-badge.connected{color:var(--accent);border-color:rgba(0,229,160,0.3);}
+
+/* ── MAIN LAYOUT ── */
+.main{
+  position:relative;z-index:1;
+  display:grid;
+  grid-template-columns:260px 1fr 300px;
+  gap:0;
+  flex:1;
+  min-height:0;
+  overflow:hidden;
+}
+
+/* ── LEFT PANEL ── */
+.left-panel{
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  overflow-y:auto;
+  background:var(--surface);
+}
+.left-panel::-webkit-scrollbar{width:3px;}
+.left-panel::-webkit-scrollbar-thumb{background:var(--border2);}
+
+.panel-section{padding:14px 16px;border-bottom:1px solid var(--border);}
+.panel-title{
+  font-family:var(--mono);font-size:9px;letter-spacing:0.15em;
+  color:var(--accent);text-transform:uppercase;margin-bottom:12px;
+  display:flex;align-items:center;gap:6px;
+}
+.panel-title::before{content:'';width:5px;height:5px;border-radius:50%;
+  background:var(--accent);box-shadow:0 0 6px var(--accent);}
+
+/* API Key input */
+.api-input-row{display:flex;gap:6px;}
+.api-input{
+  flex:1;background:var(--surface2);border:1px solid var(--border);
+  color:var(--text);font-family:var(--mono);font-size:11px;
+  padding:7px 10px;border-radius:7px;outline:none;
+}
+.api-input:focus{border-color:rgba(0,229,160,0.4);}
+.btn-sm{
+  font-family:var(--mono);font-size:10px;padding:6px 10px;
+  border-radius:6px;border:1px solid var(--border);
+  background:transparent;color:var(--muted);cursor:pointer;transition:all 0.2s;
+  white-space:nowrap;
+}
+.btn-sm:hover{background:var(--surface2);color:var(--text);}
+.btn-sm.go{border-color:rgba(0,229,160,0.4);color:var(--accent);background:rgba(0,229,160,0.06);}
+.btn-sm.go:hover{background:rgba(0,229,160,0.12);}
+.btn-sm.danger{border-color:rgba(239,68,68,0.4);color:var(--red);}
+
+/* Persona cards */
+.persona-card{
+  display:flex;align-items:center;gap:10px;
+  padding:9px 10px;border-radius:8px;
+  border:1px solid var(--border);background:var(--surface2);
+  cursor:pointer;transition:all 0.2s;margin-bottom:6px;
+}
+.persona-card:last-child{margin-bottom:0;}
+.persona-card:hover{border-color:rgba(79,172,254,0.3);}
+.persona-card.active{border-color:var(--accent2);background:rgba(79,172,254,0.08);}
+.persona-emoji{font-size:18px;width:28px;text-align:center;}
+.persona-info .pname{font-size:12px;font-weight:600;}
+.persona-info .prole{font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:1px;}
+.mood-chip{
+  font-family:var(--mono);font-size:8px;padding:2px 6px;border-radius:6px;margin-top:3px;display:inline-block;
+}
+.mood-skeptical{background:rgba(249,115,22,0.12);color:var(--orange);}
+.mood-engaged  {background:rgba(0,229,160,0.1);color:var(--accent);}
+.mood-neutral  {background:rgba(90,100,120,0.2);color:var(--muted2);}
+.mood-positive {background:rgba(79,172,254,0.12);color:var(--accent2);}
+
+/* Emotion buttons */
+.emotion-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
+.emot-btn{
+  padding:8px 6px;border-radius:8px;border:1px solid var(--border);
+  background:var(--surface2);cursor:pointer;text-align:center;
+  font-family:var(--mono);font-size:9px;color:var(--muted);transition:all 0.2s;
+}
+.emot-btn:hover{border-color:var(--accent2);}
+.emot-btn.active{border-color:var(--pink);color:var(--pink);background:rgba(244,114,182,0.08);}
+.emot-icon{font-size:16px;display:block;margin-bottom:3px;}
+
+/* Settings sliders */
+.setting-item{margin-bottom:10px;}
+.setting-item:last-child{margin-bottom:0;}
+.setting-label{
+  display:flex;justify-content:space-between;
+  font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:4px;
+}
+.setting-label span{color:var(--accent2);}
+input[type=range]{width:100%;accent-color:var(--accent);height:14px;}
+select.styled{
+  width:100%;background:var(--surface2);border:1px solid var(--border);
+  color:var(--text);font-family:var(--mono);font-size:11px;
+  padding:6px 8px;border-radius:6px;outline:none;
+}
+
+/* ── CENTER — Avatar ── */
+.center-panel{display:flex;flex-direction:column;position:relative;}
+.avatar-wrap{flex:1;position:relative;min-height:0;}
+#avatarCanvas{width:100%;height:100%;display:block;}
+
+.avatar-hud{
+  position:absolute;inset:0;pointer-events:none;
+  display:flex;flex-direction:column;justify-content:space-between;
+  padding:16px;
+}
+.hud-top{display:flex;justify-content:space-between;align-items:flex-start;}
+.hud-bottom{display:flex;justify-content:space-between;align-items:flex-end;}
+
+.name-tag{
+  background:rgba(8,11,16,0.82);backdrop-filter:blur(8px);
+  border:1px solid var(--border2);border-radius:10px;
+  padding:8px 14px;
+}
+.name-tag .n{font-size:13px;font-weight:700;color:var(--text);}
+.name-tag .r{font-family:var(--mono);font-size:10px;color:var(--muted2);margin-top:2px;}
+
+.speaking-bars{display:flex;gap:2.5px;align-items:flex-end;height:22px;}
+.speaking-bars span{
+  width:3px;background:var(--accent);border-radius:2px;
+  animation:swave 0.7s ease-in-out infinite;
+}
+.speaking-bars span:nth-child(1){height:5px;animation-delay:0s;}
+.speaking-bars span:nth-child(2){height:12px;animation-delay:0.1s;}
+.speaking-bars span:nth-child(3){height:20px;animation-delay:0.2s;}
+.speaking-bars span:nth-child(4){height:10px;animation-delay:0.3s;}
+.speaking-bars span:nth-child(5){height:5px;animation-delay:0.4s;}
+.speaking-bars.silent span{animation:none;height:3px;opacity:0.2;}
+@keyframes swave{0%,100%{transform:scaleY(0.3)}50%{transform:scaleY(1)}}
+
+.hud-stat{
+  font-family:var(--mono);font-size:10px;color:var(--muted2);
+  background:rgba(8,11,16,0.7);backdrop-filter:blur(6px);
+  border:1px solid var(--border);border-radius:7px;padding:5px 10px;
+}
+
+/* Bottom input bar */
+.input-bar{
+  border-top:1px solid var(--border);background:var(--surface);
+  padding:12px 16px;display:flex;gap:10px;align-items:center;
+  flex-shrink:0;
+}
+.main-input{
+  flex:1;background:var(--surface2);border:1px solid var(--border);
+  color:var(--text);font-family:var(--mono);font-size:13px;
+  padding:10px 14px;border-radius:10px;outline:none;
+  transition:border-color 0.2s;
+}
+.main-input:focus{border-color:rgba(0,229,160,0.4);}
+.mic-btn{
+  width:42px;height:42px;border-radius:50%;
+  border:1px solid var(--border);background:var(--surface2);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;
+  font-size:18px;transition:all 0.2s;outline:none;
+}
+.mic-btn:hover{border-color:var(--accent);}
+.mic-btn.recording{border-color:var(--red);background:rgba(239,68,68,0.1);
+  animation:micpulse 1s ease-in-out infinite;}
+@keyframes micpulse{0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,0.3)}50%{box-shadow:0 0 0 8px rgba(239,68,68,0)}}
+.send-btn{
+  font-family:var(--mono);font-size:12px;padding:10px 20px;
+  border-radius:10px;border:1px solid rgba(0,229,160,0.4);
+  background:rgba(0,229,160,0.08);color:var(--accent);cursor:pointer;transition:all 0.2s;
+}
+.send-btn:hover{background:rgba(0,229,160,0.15);}
+.send-btn:disabled{opacity:0.4;cursor:not-allowed;}
+
+/* ── RIGHT PANEL ── */
+.right-panel{
+  border-left:1px solid var(--border);
+  display:flex;flex-direction:column;
+  background:var(--surface);
+  overflow:hidden;
+}
+
+/* Conversation */
+.convo-box{
+  flex:1;overflow-y:auto;padding:14px;min-height:0;
+}
+.convo-box::-webkit-scrollbar{width:3px;}
+.convo-box::-webkit-scrollbar-thumb{background:var(--border2);}
+.convo-empty{
+  font-family:var(--mono);font-size:11px;color:var(--muted);
+  text-align:center;padding:40px 16px;line-height:2;
+}
+
+.msg{margin-bottom:12px;animation:msgin 0.2s ease;}
+@keyframes msgin{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.msg-header{display:flex;align-items:center;gap:7px;margin-bottom:5px;}
+.msg-av{
+  width:24px;height:24px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:10px;font-weight:700;flex-shrink:0;
+}
+.msg-av.user{background:rgba(0,229,160,0.12);color:var(--accent);border:1px solid rgba(0,229,160,0.25);}
+.msg-av.ai  {background:rgba(79,172,254,0.12);color:var(--accent2);border:1px solid rgba(79,172,254,0.25);}
+.msg-name{font-family:var(--mono);font-size:9px;color:var(--muted);}
+.msg-time{font-family:var(--mono);font-size:9px;color:var(--muted);margin-left:auto;}
+.msg-bubble{
+  padding:9px 12px;border-radius:9px;font-size:12px;line-height:1.65;
+  border:1px solid var(--border);
+}
+.msg-bubble.user{background:rgba(0,229,160,0.05);border-color:rgba(0,229,160,0.12);}
+.msg-bubble.ai  {background:rgba(79,172,254,0.05);border-color:rgba(79,172,254,0.12);}
+.msg-bubble.streaming::after{
+  content:'▊';color:var(--accent2);animation:cur 0.7s infinite;font-size:11px;margin-left:2px;
+}
+@keyframes cur{0%,100%{opacity:1}50%{opacity:0}}
+
+/* Live pipeline panel */
+.pipeline-panel{
+  border-top:1px solid var(--border);padding:12px 14px;
+  background:var(--surface2);flex-shrink:0;
+}
+.pipe-title{font-family:var(--mono);font-size:9px;letter-spacing:0.12em;color:var(--muted);text-transform:uppercase;margin-bottom:8px;}
+.pipe-row{display:flex;flex-direction:column;gap:4px;}
+.pipe-item{
+  display:flex;align-items:center;gap:7px;
+  font-family:var(--mono);font-size:10px;color:var(--muted);
+  padding:5px 8px;border-radius:6px;border:1px solid transparent;transition:all 0.2s;
+}
+.pipe-item.active{color:var(--accent);border-color:rgba(0,229,160,0.2);background:rgba(0,229,160,0.05);}
+.pipe-item.done  {color:var(--muted2);border-color:rgba(255,255,255,0.05);}
+.pipe-indicator{width:6px;height:6px;border-radius:50%;background:var(--muted);flex-shrink:0;}
+.pipe-item.active .pipe-indicator{background:var(--accent);box-shadow:0 0 5px var(--accent);animation:pipepulse 0.8s infinite;}
+.pipe-item.done   .pipe-indicator{background:rgba(0,229,160,0.4);}
+@keyframes pipepulse{0%,100%{opacity:1}50%{opacity:0.4}}
+
+/* Viseme mini display */
+.viseme-mini{
+  display:flex;gap:3px;flex-wrap:wrap;margin-top:8px;
+}
+.vm-cell{
+  width:28px;height:24px;border-radius:4px;
+  background:var(--surface);border:1px solid var(--border);
+  font-family:var(--mono);font-size:8px;color:var(--muted);
+  display:flex;align-items:center;justify-content:center;transition:all 0.1s;
+}
+.vm-cell.hot{background:rgba(249,115,22,0.15);border-color:var(--orange);color:var(--orange);}
+
+/* Stats footer */
+.stats-bar{
+  border-top:1px solid var(--border);padding:8px 14px;
+  display:flex;gap:14px;flex-shrink:0;background:var(--surface);
+}
+.stat-item{font-family:var(--mono);font-size:9px;color:var(--muted);}
+.stat-item span{color:var(--accent);}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <div class="logo">NEXTGENX</div>
+    <div class="version">v1.0 · Full System</div>
+    <div class="pipeline-steps">
+      <div class="pipe-dot" id="pd1">01·MIC</div>
+      <div class="pipe-dot" id="pd2">02·LLM</div>
+      <div class="pipe-dot" id="pd3">03·TTS</div>
+      <div class="pipe-dot" id="pd4">04·AVATAR</div>
+      <div class="pipe-dot" id="pd5">05·EMOTION</div>
+    </div>
+  </div>
+  <div class="topbar-right">
+    <div class="api-badge" id="apiBadge">
+      <div class="dot"></div>
+      <span id="apiStatus">No API key</span>
+    </div>
+    <button class="btn-sm" onclick="exportSession()">Export session</button>
+    <button class="btn-sm danger" onclick="clearAll()">Clear</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- LEFT PANEL -->
+  <div class="left-panel">
+
+    <!-- API Key -->
+    <div class="panel-section">
+      <div class="panel-title">API Connection</div>
+      <div class="api-input-row">
+        <input class="api-input" type="password" id="apiKeyInput" placeholder="sk-ant-api03-…"/>
+        <button class="btn-sm go" onclick="connectAPI()">Connect</button>
+      </div>
+    </div>
+
+    <!-- Persona -->
+    <div class="panel-section">
+      <div class="panel-title">HCP Persona</div>
+      <div id="personaList"></div>
+    </div>
+
+    <!-- Emotion -->
+    <div class="panel-section">
+      <div class="panel-title">Emotion Override</div>
+      <div class="emotion-grid">
+        <button class="emot-btn active" id="eb-neutral"  onclick="setEmotion('neutral')"><span class="emot-icon">😐</span>neutral</button>
+        <button class="emot-btn"        id="eb-engaged"  onclick="setEmotion('engaged')"><span class="emot-icon">🤔</span>engaged</button>
+        <button class="emot-btn"        id="eb-skeptical"onclick="setEmotion('skeptical')"><span class="emot-icon">🧐</span>skeptical</button>
+        <button class="emot-btn"        id="eb-positive" onclick="setEmotion('positive')"><span class="emot-icon">😊</span>positive</button>
+      </div>
+    </div>
+
+    <!-- Voice settings -->
+    <div class="panel-section">
+      <div class="panel-title">Voice Settings</div>
+      <div class="setting-item">
+        <div class="setting-label">Speed <span id="rateVal">0.95</span></div>
+        <input type="range" min="60" max="130" value="95" id="rateSlider"
+          oninput="document.getElementById('rateVal').textContent=(this.value/100).toFixed(2)"/>
+      </div>
+      <div class="setting-item">
+        <div class="setting-label">Pitch <span id="pitchVal">1.00</span></div>
+        <input type="range" min="70" max="130" value="100" id="pitchSlider"
+          oninput="document.getElementById('pitchVal').textContent=(this.value/100).toFixed(2)"/>
+      </div>
+      <div class="setting-item" style="margin-bottom:0">
+        <div class="setting-label">Viseme ms <span id="visemeVal">105ms</span></div>
+        <input type="range" min="60" max="200" value="105" id="visemeSlider"
+          oninput="document.getElementById('visemeVal').textContent=this.value+'ms'"/>
+      </div>
+    </div>
+
+    <!-- Model -->
+    <div class="panel-section">
+      <div class="panel-title">LLM Model</div>
+      <select class="styled" id="modelSel">
+        <option value="claude-sonnet-4-5">claude-sonnet-4-5</option>
+        <option value="claude-haiku-4-5-20251001">claude-haiku-4-5 (faster)</option>
+      </select>
+    </div>
+
+    <!-- Quick demos -->
+    <div class="panel-section">
+      <div class="panel-title">Quick Demo</div>
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <button class="btn-sm go" onclick="runDemo('intro')" style="width:100%;text-align:left;padding:8px 12px;">▶ Intro greeting</button>
+        <button class="btn-sm go" onclick="runDemo('skeptical')" style="width:100%;text-align:left;padding:8px 12px;">▶ Skeptical response</button>
+        <button class="btn-sm go" onclick="runDemo('question')" style="width:100%;text-align:left;padding:8px 12px;">▶ Ask about trials</button>
+        <button class="btn-sm" onclick="runDemo('idle')" style="width:100%;text-align:left;padding:8px 12px;">💤 Toggle idle anim</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- CENTER — Avatar -->
+  <div class="center-panel">
+    <div class="avatar-wrap">
+      <canvas id="avatarCanvas"></canvas>
+      <div class="avatar-hud">
+        <div class="hud-top">
+          <div class="name-tag">
+            <div class="n" id="hudName">Dr. Priya Mehta</div>
+            <div class="r" id="hudRole">Interventional Cardiologist · Apollo Hospitals</div>
+          </div>
+          <div class="hud-stat" id="hudFps">60 fps</div>
+        </div>
+        <div class="hud-bottom">
+          <div class="hud-stat" id="hudEmotion">😐 neutral</div>
+          <div class="speaking-bars silent" id="speakBars">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Input bar -->
+    <div class="input-bar">
+      <button class="mic-btn" id="micBtn" onclick="toggleMic()">🎙</button>
+      <input class="main-input" id="mainInput" placeholder="Type your message to the HCP…"
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMessage()}"/>
+      <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>Send ↗</button>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+    <!-- Conversation -->
+    <div class="convo-box" id="convoBox">
+      <div class="convo-empty" id="convoEmpty">
+        Enter your Anthropic API key<br/>
+        select a persona<br/>
+        then start the conversation ↙
+      </div>
+    </div>
+
+    <!-- Pipeline status -->
+    <div class="pipeline-panel">
+      <div class="pipe-title">Live Pipeline</div>
+      <div class="pipe-row">
+        <div class="pipe-item" id="pi1"><div class="pipe-indicator"></div>Voice capture · idle</div>
+        <div class="pipe-item" id="pi2"><div class="pipe-indicator"></div>Claude API · idle</div>
+        <div class="pipe-item" id="pi3"><div class="pipe-indicator"></div>TTS engine · idle</div>
+        <div class="pipe-item" id="pi4"><div class="pipe-indicator"></div>Avatar renderer · idle</div>
+        <div class="pipe-item" id="pi5"><div class="pipe-indicator"></div>Emotion engine · idle</div>
+      </div>
+      <div class="viseme-mini" id="visemeMini"></div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-bar">
+      <div class="stat-item">Turns <span id="stTurns">0</span></div>
+      <div class="stat-item">Tokens <span id="stTokens">0</span></div>
+      <div class="stat-item">Latency <span id="stLatency">--</span></div>
+      <div class="stat-item">Visemes <span id="stVisemes">0</span></div>
+      <div class="stat-item">Emotion <span id="stEmotion">neutral</span></div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ══════════════════════════════════════════════════════════
+// NEXTGENX — Complete Integrated System
+// Steps 1–6: Voice → LLM → TTS → Viseme → Avatar → Emotion
+// ══════════════════════════════════════════════════════════
+
+// ── PERSONAS ──────────────────────────────────────────────
+const PERSONAS = [
+  { id:'cardiologist', name:'Dr. Priya Mehta',  role:'Interventional Cardiologist', hospital:'Apollo Hospitals', mood:'skeptical', emoji:'🫀',
+    skinH:25, skinS:0.55, skinL:0.52,
+    system:`You are Dr. Priya Mehta, a busy interventional cardiologist at Apollo Hospitals. You are skeptical unless shown strong RCT data. You ask pointed questions about side effects and patient outcomes. Keep responses to 2-3 sentences. Ask one follow-up question. Stay in character.` },
+  { id:'oncologist',   name:'Dr. Arjun Sinha',  role:'Medical Oncologist', hospital:'Tata Memorial', mood:'engaged', emoji:'🧬',
+    skinH:30, skinS:0.5, skinL:0.44,
+    system:`You are Dr. Arjun Sinha, a medical oncologist at Tata Memorial. You are intellectually curious. Ask about mechanisms, trial phases, combination therapy. Keep responses 2-3 sentences. Stay in character.` },
+  { id:'gp',           name:'Dr. Kavitha Rao',  role:'General Practitioner', hospital:'City Clinic', mood:'neutral', emoji:'🩺',
+    skinH:22, skinS:0.52, skinL:0.48,
+    system:`You are Dr. Kavitha Rao, a GP at a busy urban clinic. You value simplicity and patient compliance. Ask about cost, dosing frequency, and practicality. Keep responses 2-3 sentences. Stay in character.` },
+  { id:'neurologist',  name:'Dr. Rahul Verma',  role:'Neurologist', hospital:'NIMHANS', mood:'positive', emoji:'🧠',
+    skinH:28, skinS:0.45, skinL:0.41,
+    system:`You are Dr. Rahul Verma, a neurologist at NIMHANS. You are open and collaborative. Ask about quality of life improvements and long-term safety. Keep responses 2-3 sentences. Stay in character.` },
+];
+
+// ── VISEME DATA ───────────────────────────────────────────
+const VISEME_BS = {
+  rest:{ jawOpen:0,   mouthClose:0.8, mouthFunnel:0,   mouthPucker:0,   mouthSmile:0,   mouthStretch:0,  mouthPress:0,   cheekPuff:0 },
+  PP:  { jawOpen:0,   mouthClose:1.0, mouthFunnel:0,   mouthPucker:0.3, mouthSmile:0,   mouthStretch:0,  mouthPress:0.8, cheekPuff:0 },
+  FF:  { jawOpen:0.1, mouthClose:0.3, mouthFunnel:0.2, mouthPucker:0,   mouthSmile:0,   mouthStretch:0.4,mouthPress:0,   cheekPuff:0 },
+  TH:  { jawOpen:0.2, mouthClose:0,   mouthFunnel:0,   mouthPucker:0,   mouthSmile:0.1, mouthStretch:0.2,mouthPress:0,   cheekPuff:0 },
+  DD:  { jawOpen:0.3, mouthClose:0.2, mouthFunnel:0,   mouthPucker:0,   mouthSmile:0.1, mouthStretch:0.1,mouthPress:0,   cheekPuff:0 },
+  kk:  { jawOpen:0.4, mouthClose:0,   mouthFunnel:0,   mouthPucker:0,   mouthSmile:0,   mouthStretch:0,  mouthPress:0,   cheekPuff:0.1},
+  CH:  { jawOpen:0.3, mouthClose:0.1, mouthFunnel:0.5, mouthPucker:0.3, mouthSmile:0,   mouthStretch:0,  mouthPress:0,   cheekPuff:0 },
+  SS:  { jawOpen:0.2, mouthClose:0.3, mouthFunnel:0.1, mouthPucker:0.1, mouthSmile:0.3, mouthStretch:0.3,mouthPress:0,   cheekPuff:0 },
+  nn:  { jawOpen:0.1, mouthClose:0.6, mouthFunnel:0,   mouthPucker:0,   mouthSmile:0,   mouthStretch:0,  mouthPress:0.2, cheekPuff:0 },
+  RR:  { jawOpen:0.3, mouthClose:0.1, mouthFunnel:0.4, mouthPucker:0.5, mouthSmile:0,   mouthStretch:0,  mouthPress:0,   cheekPuff:0 },
+  aa:  { jawOpen:0.9, mouthClose:0,   mouthFunnel:0,   mouthPucker:0,   mouthSmile:0,   mouthStretch:0.4,mouthPress:0,   cheekPuff:0 },
+  E:   { jawOpen:0.5, mouthClose:0,   mouthFunnel:0,   mouthPucker:0,   mouthSmile:0.6, mouthStretch:0.6,mouthPress:0,   cheekPuff:0 },
+  I:   { jawOpen:0.3, mouthClose:0,   mouthFunnel:0,   mouthPucker:0,   mouthSmile:0.8, mouthStretch:0.4,mouthPress:0,   cheekPuff:0 },
+  O:   { jawOpen:0.6, mouthClose:0,   mouthFunnel:0.6, mouthPucker:0.4, mouthSmile:0,   mouthStretch:0,  mouthPress:0,   cheekPuff:0 },
+  U:   { jawOpen:0.4, mouthClose:0,   mouthFunnel:0.8, mouthPucker:0.8, mouthSmile:0,   mouthStretch:0,  mouthPress:0,   cheekPuff:0 },
+};
+const VISEME_IDS = Object.keys(VISEME_BS);
+
+const PHONEME_MAP = {
+  P:'PP',B:'PP',M:'PP', F:'FF',V:'FF', TH:'TH',DH:'TH',
+  T:'DD',D:'DD',N:'DD',L:'DD', K:'kk',G:'kk',NG:'kk',
+  CH:'CH',JH:'CH',SH:'CH',ZH:'CH', S:'SS',Z:'SS',
+  R:'RR',ER:'RR', AA:'aa',AH:'aa', EH:'E',EY:'E',AE:'E',
+  IH:'I',IY:'I', OW:'O',OY:'O',AO:'O', UW:'U',UH:'U',AW:'U',AY:'U',
+};
+
+function textToVisemes(text) {
+  const out = [];
+  const words = text.toLowerCase().replace(/[^a-z\s]/g,'').split(/\s+/);
+  words.forEach(w => {
+    let i=0;
+    while(i<w.length){
+      const c=w[i], c2=w[i+1]||'';
+      let v='DD';
+      if(c==='s'&&c2==='h'){v='CH';i+=2;}
+      else if(c==='t'&&c2==='h'){v='TH';i+=2;}
+      else if(c==='c'&&c2==='h'){v='CH';i+=2;}
+      else if(c==='p'||c==='b'||c==='m'){v='PP';i++;}
+      else if(c==='f'||c==='v'){v='FF';i++;}
+      else if(c==='t'||c==='d'||c==='l'||c==='n'){v='DD';i++;}
+      else if(c==='k'||c==='g'||c==='c'){v='kk';i++;}
+      else if(c==='s'||c==='z'){v='SS';i++;}
+      else if(c==='r'){v='RR';i++;}
+      else if(c==='a'){v='aa';i++;}
+      else if(c==='e'){v='E';i++;}
+      else if(c==='i'){v='I';i++;}
+      else if(c==='o'){v='O';i++;}
+      else if(c==='u'){v='U';i++;}
+      else{v='DD';i++;}
+      out.push(v);
+    }
+    out.push('rest');
+  });
+  return out;
+}
+
+// ── EMOTION ENGINE ────────────────────────────────────────
+const EMOTION_PRESETS = {
+  neutral:  { browH:0,     browF:0,    smile:0,    eyeOpen:1.0 },
+  engaged:  { browH:0.08,  browF:0,    smile:0.15, eyeOpen:1.1 },
+  skeptical:{ browH:-0.04, browF:0.06, smile:0,    eyeOpen:0.85},
+  positive: { browH:0.06,  browF:0,    smile:0.28, eyeOpen:1.05},
+};
+
+function detectEmotion(text) {
+  const t = text.toLowerCase();
+  if (/not convinced|skeptical|doubt|concern|risk|side effect|show me|evidence|proof/i.test(t)) return 'skeptical';
+  if (/interesting|curious|tell me|how does|what about|elaborate|mechanism/i.test(t))           return 'engaged';
+  if (/great|excellent|impressive|agree|yes|good point|thank|appreciate/i.test(t))              return 'positive';
+  return 'neutral';
+}
+
+// ── STATE ─────────────────────────────────────────────────
+let apiKey='', currentPersona=PERSONAS[0], history=[];
+let isStreaming=false, abortCtrl=null;
+let turns=0, totalTokens=0, totalVisemes=0;
+let currentEmotion='neutral';
+let isRecording=false, recognition=null;
+let micStream=null;
+
+// Avatar morph state
+let morphState={jawOpen:0,mouthClose:0.8,mouthFunnel:0,mouthPucker:0,mouthSmile:0,mouthStretch:0,mouthPress:0,cheekPuff:0};
+let morphTarget={...morphState};
+let headYaw=0,headPitch=0,headYawT=0,headPitchT=0;
+let idleT=0,idleOn=true,blinkT=0,nextBlink=4,blinkAmt=0,blinkAnim=false;
+let emotState={...EMOTION_PRESETS.neutral};
+let emotTarget={...EMOTION_PRESETS.neutral};
+let isSpeaking=false;
+let visemeTimer=null, visemeClearTimer=null;
+
+// ── THREE.JS SETUP ────────────────────────────────────────
+const canvas   = document.getElementById('avatarCanvas');
+const renderer = new THREE.WebGLRenderer({canvas,antialias:true,alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.1;
+
+const scene  = new THREE.Scene();
+scene.background=new THREE.Color(0x080b10);
+scene.fog=new THREE.FogExp2(0x080b10,0.07);
+
+const camera = new THREE.PerspectiveCamera(40,1,0.1,100);
+camera.position.set(0,0.12,2.3);
+
+// Lights
+scene.add(new THREE.AmbientLight(0xffffff,0.35));
+const key=new THREE.DirectionalLight(0xfff5e8,1.7);key.position.set(1.5,2,2);key.castShadow=true;scene.add(key);
+const fill=new THREE.DirectionalLight(0xe8f0ff,0.55);fill.position.set(-2,1,1);scene.add(fill);
+const rim=new THREE.DirectionalLight(0x00e5a0,0.5);rim.position.set(0,0.5,-2);scene.add(rim);
+
+// Avatar objects
+const avatarGroup=new THREE.Group();scene.add(avatarGroup);
+let headMesh,jawMesh,upperLip,lowerLip,leftEye,rightEye,leftLid,rightLid,leftBrow,rightBrow,noseMesh;
+
+function buildAvatar(p) {
+  while(avatarGroup.children.length) avatarGroup.remove(avatarGroup.children[0]);
+  const skin=new THREE.Color().setHSL(p.skinH/360,p.skinS,p.skinL);
+  const dark=new THREE.Color().setHSL(p.skinH/360,p.skinS,p.skinL-0.12);
+  const lip =new THREE.Color().setHSL(p.skinH/360,0.5,p.skinL-0.17);
+  const sm=(c,r=0.6,m=0)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});
+  const skinM=sm(skin),darkM=sm(dark,0.65),lipM=sm(lip,0.5),
+        hairM=sm(new THREE.Color().setHSL(0.07,0.3,0.12),0.8),
+        whiteM=sm(0xf5f5f5,0.3),coatM=sm(0xf8f9fa,0.7),
+        scleraM=sm(0xfef9f0,0.4),irisM=sm(0x2a1a0a,0.2),pupilM=sm(0x080808,0.1,0.3);
+
+  // Head
+  const hg=new THREE.SphereGeometry(0.22,32,32);
+  hg.applyMatrix4(new THREE.Matrix4().makeScale(1,1.15,0.92));
+  headMesh=new THREE.Mesh(hg,skinM);headMesh.castShadow=true;avatarGroup.add(headMesh);
+
+  // Jaw
+  const jg=new THREE.SphereGeometry(0.16,24,24);
+  jg.applyMatrix4(new THREE.Matrix4().makeScale(1,0.7,0.9));
+  jawMesh=new THREE.Mesh(jg,skinM);jawMesh.position.set(0,-0.14,0.04);jawMesh.castShadow=true;avatarGroup.add(jawMesh);
+
+  // Nose
+  const ng2=new THREE.SphereGeometry(0.034,12,12);
+  ng2.applyMatrix4(new THREE.Matrix4().makeScale(1,0.8,1.4));
+  noseMesh=new THREE.Mesh(ng2,skinM);noseMesh.position.set(0,-0.02,0.215);avatarGroup.add(noseMesh);
+  [-0.024,0.024].forEach(dx=>{const nm=new THREE.Mesh(new THREE.SphereGeometry(0.015,8,8),darkM);nm.position.set(dx,-0.05,0.21);avatarGroup.add(nm);});
+
+  // Eyes
+  function mkEye(dx){
+    const g=new THREE.Group();g.position.set(dx,0.06,0.185);
+    g.add(Object.assign(new THREE.Mesh(new THREE.SphereGeometry(0.035,20,20),scleraM)));
+    const ir=new THREE.Mesh(new THREE.SphereGeometry(0.022,16,16),irisM);ir.position.z=0.02;g.add(ir);
+    const pu=new THREE.Mesh(new THREE.SphereGeometry(0.012,12,12),pupilM);pu.position.z=0.032;g.add(pu);
+    avatarGroup.add(g);return g;
+  }
+  leftEye=mkEye(-0.075);rightEye=mkEye(0.075);
+
+  // Lids
+  function mkLid(dx){
+    const lg2=new THREE.SphereGeometry(0.037,16,8,0,Math.PI*2,0,Math.PI*0.5);
+    const lm2=new THREE.Mesh(lg2,skinM);lm2.position.set(dx,0.062,0.183);lm2.rotation.x=-0.1;avatarGroup.add(lm2);return lm2;
+  }
+  leftLid=mkLid(-0.075);rightLid=mkLid(0.075);
+
+  // Brows
+  function mkBrow(dx){
+    const bm=new THREE.Mesh(new THREE.BoxGeometry(0.055,0.008,0.012),hairM);
+    bm.position.set(dx,0.115,0.19);bm.rotation.z=dx<0?0.12:-0.12;avatarGroup.add(bm);return bm;
+  }
+  leftBrow=mkBrow(-0.075);rightBrow=mkBrow(0.075);
+
+  // Lips
+  const ulg=new THREE.SphereGeometry(0.054,16,8);ulg.applyMatrix4(new THREE.Matrix4().makeScale(1,0.4,0.6));
+  upperLip=new THREE.Mesh(ulg,lipM);upperLip.position.set(0,-0.10,0.194);avatarGroup.add(upperLip);
+  const llg=new THREE.SphereGeometry(0.054,16,8);llg.applyMatrix4(new THREE.Matrix4().makeScale(1,0.45,0.6));
+  lowerLip=new THREE.Mesh(llg,lipM);lowerLip.position.set(0,-0.125,0.19);avatarGroup.add(lowerLip);
+
+  // Teeth
+  const tm=new THREE.Mesh(new THREE.BoxGeometry(0.07,0.018,0.012),whiteM);tm.position.set(0,-0.113,0.197);avatarGroup.add(tm);
+
+  // Ears
+  [-0.225,0.225].forEach(dx=>{const eg2=new THREE.SphereGeometry(0.044,12,12);eg2.applyMatrix4(new THREE.Matrix4().makeScale(0.45,0.8,0.4));const em2=new THREE.Mesh(eg2,skinM);em2.position.set(dx,0,0);avatarGroup.add(em2);});
+
+  // Neck
+  avatarGroup.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.11,0.22,16),skinM),{position:new THREE.Vector3(0,-0.33,0)}));
+
+  // Coat
+  avatarGroup.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.38,0.28,24),coatM),{position:new THREE.Vector3(0,-0.60,0)}));
+
+  // Hair
+  const hh=new THREE.SphereGeometry(0.224,24,24);hh.applyMatrix4(new THREE.Matrix4().makeScale(1,0.85,0.92));
+  avatarGroup.add(Object.assign(new THREE.Mesh(hh,hairM),{position:new THREE.Vector3(0,0.06,-0.02)}));
+
+  document.getElementById('hudName').textContent=p.name;
+  document.getElementById('hudRole').textContent=`${p.role} · ${p.hospital}`;
+}
+
+// ── MORPH APPLICATION ─────────────────────────────────────
+function applyMorphs() {
+  const LERP=0.2;
+  Object.keys(morphState).forEach(k=>{ morphState[k]+=(morphTarget[k]-morphState[k])*LERP; });
+  Object.keys(emotState).forEach(k=>{  emotState[k]+=(emotTarget[k]-emotState[k])*0.07; });
+  if(!jawMesh) return;
+  const {jawOpen,mouthSmile,mouthPucker,mouthFunnel,mouthStretch,cheekPuff}=morphState;
+  const smile=mouthSmile+emotState.smile;
+  jawMesh.position.y=-0.14-jawOpen*0.04;jawMesh.rotation.x=jawOpen*0.18;
+  if(upperLip){upperLip.position.y=-0.10+smile*0.008;upperLip.scale.x=1+mouthFunnel*0.08-mouthPucker*0.12+mouthStretch*0.1;upperLip.scale.z=1+mouthPucker*0.3;}
+  if(lowerLip){lowerLip.position.y=-0.125-jawOpen*0.035+smile*0.006;lowerLip.scale.x=1+mouthFunnel*0.08-mouthPucker*0.1;lowerLip.scale.z=1+mouthPucker*0.25;}
+  if(leftBrow){leftBrow.position.y=0.115+emotState.browH;leftBrow.rotation.z=0.12+emotState.browF*0.15;}
+  if(rightBrow){rightBrow.position.y=0.115+emotState.browH;rightBrow.rotation.z=-0.12-emotState.browF*0.15;}
+  const lid=1-blinkAmt;
+  if(leftLid)leftLid.scale.y=lid*emotState.eyeOpen;
+  if(rightLid)rightLid.scale.y=lid*emotState.eyeOpen;
+  if(noseMesh)noseMesh.scale.x=1+cheekPuff*0.3;
+}
+
+function doIdle(dt) {
+  if(!idleOn) return;
+  idleT+=dt;
+  headYawT=Math.sin(idleT*0.38)*0.05+Math.sin(idleT*0.12)*0.02;
+  headPitchT=Math.sin(idleT*0.31)*0.03+Math.sin(idleT*0.08)*0.015;
+  blinkT+=dt;
+  if(blinkT>nextBlink&&!blinkAnim){blinkT=0;nextBlink=3+Math.random()*5;triggerBlink();}
+}
+
+function triggerBlink(){
+  blinkAnim=true;let t=0;
+  const iv=setInterval(()=>{
+    t+=0.016;
+    if(t<0.07)blinkAmt=t/0.07;
+    else if(t<0.14)blinkAmt=1-(t-0.07)/0.07;
+    else{blinkAmt=0;blinkAnim=false;clearInterval(iv);}
+  },16);
+}
+
+// ── VISEME ANIMATION ──────────────────────────────────────
+function applyViseme(id){
+  const bs=VISEME_BS[id]||VISEME_BS.rest;
+  Object.assign(morphTarget,bs);
+  highlightVisemeMini(id);
+  totalVisemes++;
+  document.getElementById('stVisemes').textContent=totalVisemes;
+}
+
+let visemeMiniCells=[];
+function initVisemeMini(){
+  const cont=document.getElementById('visemeMini');
+  cont.innerHTML='';
+  VISEME_IDS.forEach(id=>{
+    const el=document.createElement('div');
+    el.className='vm-cell';el.id='vmc-'+id;el.textContent=id;
+    cont.appendChild(el);visemeMiniCells.push(el);
+  });
+}
+function highlightVisemeMini(id){
+  visemeMiniCells.forEach(c=>c.classList.remove('hot'));
+  document.getElementById('vmc-'+id)?.classList.add('hot');
+}
+
+function playSentenceVisemes(text){
+  const seq=textToVisemes(text);
+  const ms=parseInt(document.getElementById('visemeSlider').value);
+  clearTimeout(visemeTimer);
+  let i=0;
+  isSpeaking=true;
+  document.getElementById('speakBars').classList.remove('silent');
+  setPipe(4,'active','Avatar · animating');
+  function next(){
+    if(i>=seq.length){
+      applyViseme('rest');
+      isSpeaking=false;
+      document.getElementById('speakBars').classList.add('silent');
+      setPipe(4,'done','Avatar · idle');
+      return;
+    }
+    applyViseme(seq[i++]);
+    visemeTimer=setTimeout(next,ms+Math.random()*30);
+  }
+  next();
+}
+
+// ── SPEECH SYNTHESIS ──────────────────────────────────────
+function speakText(text){
+  if(!window.speechSynthesis)return;
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text);
+  const voices=speechSynthesis.getVoices().filter(v=>v.lang.startsWith('en'));
+  if(voices.length)u.voice=voices[0];
+  u.rate=parseFloat(document.getElementById('rateSlider').value)/100;
+  u.pitch=parseFloat(document.getElementById('pitchSlider').value)/100;
+  speechSynthesis.speak(u);
+}
+
+// ── PIPELINE STATUS ───────────────────────────────────────
+function setPipe(n,state,label){
+  const el=document.getElementById('pi'+n);
+  if(!el)return;
+  el.className='pipe-item'+(state?' '+state:'');
+  el.innerHTML=`<div class="pipe-indicator"></div>${label}`;
+  // Also update top bar dots
+  const dot=document.getElementById('pd'+n);
+  if(dot)dot.className='pipe-dot'+(state==='active'?' active':state==='done'?' done':'');
+}
+function setPipeAll(state){[1,2,3,4,5].forEach(n=>setPipe(n,'','idle'));}
+
+// ── API CONNECTION ────────────────────────────────────────
+function connectAPI(){
+  const v=document.getElementById('apiKeyInput').value.trim();
+  if(!v.startsWith('sk-ant')){alert('Invalid key — must start with sk-ant-');return;}
+  apiKey=v;
+  document.getElementById('apiBadge').className='api-badge connected';
+  document.getElementById('apiStatus').textContent='Connected';
+  document.getElementById('sendBtn').disabled=false;
+}
+
+// ── PERSONA ───────────────────────────────────────────────
+function initPersonaList(){
+  const cont=document.getElementById('personaList');
+  cont.innerHTML='';
+  PERSONAS.forEach(p=>{
+    const el=document.createElement('div');
+    el.className='persona-card'+(p.id===currentPersona.id?' active':'');
+    el.id='pc-'+p.id;
+    el.innerHTML=`<div class="persona-emoji">${p.emoji}</div>
+      <div class="persona-info">
+        <div class="pname">${p.name}</div>
+        <div class="prole">${p.role}</div>
+        <div class="mood-chip mood-${p.mood}">${p.mood}</div>
+      </div>`;
+    el.onclick=()=>switchPersona(p);
+    cont.appendChild(el);
+  });
+}
+function switchPersona(p){
+  currentPersona=p;history=[];turns=0;totalTokens=0;
+  document.querySelectorAll('.persona-card').forEach(c=>c.classList.remove('active'));
+  document.getElementById('pc-'+p.id)?.classList.add('active');
+  buildAvatar(p);
+  document.getElementById('convoBox').innerHTML=`<div class="convo-empty">Switched to ${p.name}.<br/>Start your conversation ↙</div>`;
+  document.getElementById('stTurns').textContent='0';
+  document.getElementById('stTokens').textContent='0';
+}
+
+// ── EMOTION ───────────────────────────────────────────────
+function setEmotion(type){
+  currentEmotion=type;
+  emotTarget={...EMOTION_PRESETS[type]||EMOTION_PRESETS.neutral};
+  document.querySelectorAll('.emot-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('eb-'+type)?.classList.add('active');
+  document.getElementById('hudEmotion').textContent={neutral:'😐 neutral',engaged:'🤔 engaged',skeptical:'🧐 skeptical',positive:'😊 positive'}[type]||'😐 neutral';
+  document.getElementById('stEmotion').textContent=type;
+  setPipe(5,'active','Emotion · '+type);
+  setTimeout(()=>setPipe(5,'done','Emotion · idle'),1200);
+}
+
+// ── SEND MESSAGE ──────────────────────────────────────────
+async function sendMessage(){
+  const input=document.getElementById('mainInput');
+  const text=input.value.trim();
+  if(!text||isStreaming||!apiKey)return;
+  input.value='';
+  document.getElementById('convoBox').querySelector('.convo-empty')?.remove();
+
+  addMsg('user','You',text);
+  history.push({role:'user',content:text});
+  turns++;document.getElementById('stTurns').textContent=turns;
+
+  isStreaming=true;
+  abortCtrl=new AbortController();
+  document.getElementById('sendBtn').disabled=true;
+  const t0=Date.now();
+
+  setPipe(1,'done','Voice · received');
+  setPipe(2,'active','Claude · thinking…');
+
+  const aiEl=addMsg('ai',currentPersona.name,'',true);
+  let full='',buffer='';
+
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',signal:abortCtrl.signal,
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key':apiKey,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true'
+      },
+      body:JSON.stringify({
+        model:document.getElementById('modelSel').value,
+        max_tokens:250,
+        temperature:0.75,
+        system:currentPersona.system,
+        messages:history,
+        stream:true
+      })
+    });
+
+    if(!res.ok){const e=await res.json();throw new Error(e.error?.message||res.statusText);}
+
+    const reader=res.body.getReader();
+    const dec=new TextDecoder();
+    setPipe(2,'active','Claude · streaming…');
+    setPipe(3,'active','TTS · buffering…');
+
+    while(true){
+      const{done,value}=await reader.read();
+      if(done)break;
+      const lines=dec.decode(value).split('\n');
+      for(const line of lines){
+        if(!line.startsWith('data: '))continue;
+        const data=line.slice(6).trim();
+        if(data==='[DONE]')continue;
+        try{
+          const evt=JSON.parse(data);
+          if(evt.type==='content_block_delta'&&evt.delta?.text){
+            full+=evt.delta.text;buffer+=evt.delta.text;
+            const bubble=aiEl.querySelector('.msg-bubble');
+            bubble.textContent=full;
+            scrollConvo();
+            totalTokens+= 1;
+            document.getElementById('stTokens').textContent=totalTokens;
+          }
+        }catch{}
+      }
+    }
+
+    // Detect emotion from response
+    const detectedEmotion=detectEmotion(full);
+    setEmotion(detectedEmotion);
+
+    // Finalize bubble
+    const bubble=aiEl.querySelector('.msg-bubble');
+    bubble.textContent=full;bubble.classList.remove('streaming');
+    history.push({role:'assistant',content:full});
+
+    const lat=Date.now()-t0;
+    document.getElementById('stLatency').textContent=lat+'ms';
+
+    // Speak + animate
+    setPipe(2,'done','Claude · done');
+    setPipe(3,'active','TTS · speaking…');
+    speakText(full);
+    playSentenceVisemes(full);
+
+  }catch(err){
+    if(err.name!=='AbortError'){
+      const bubble=aiEl.querySelector('.msg-bubble');
+      bubble.textContent='⚠ '+err.message;bubble.classList.remove('streaming');
+    }
+    setPipeAll('');
+  }
+
+  isStreaming=false;
+  document.getElementById('sendBtn').disabled=false;
+}
+
+// ── CONVERSATION DOM ──────────────────────────────────────
+function addMsg(role,name,text,streaming=false){
+  const box=document.getElementById('convoBox');
+  const el=document.createElement('div');el.className='msg';
+  const ts=new Date().toLocaleTimeString();
+  const initials=role==='user'?'SR':currentPersona.name.split(' ').map(w=>w[0]).join('').slice(0,2);
+  el.innerHTML=`<div class="msg-header">
+    <div class="msg-av ${role}">${initials}</div>
+    <span class="msg-name">${name}</span>
+    <span class="msg-time">${ts}</span>
+  </div>
+  <div class="msg-bubble ${role}${streaming?' streaming':''}">${text}</div>`;
+  box.appendChild(el);scrollConvo();return el;
+}
+function scrollConvo(){const b=document.getElementById('convoBox');b.scrollTop=b.scrollHeight;}
+
+// ── MIC (Web Speech) ─────────────────────────────────────
+function toggleMic(){
+  if(isRecording)stopMic();else startMic();
+}
+function startMic(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){alert('Use Chrome for voice input');return;}
+  recognition=new SR();recognition.lang='en-US';
+  recognition.interimResults=false;recognition.continuous=false;
+  recognition.onresult=(e)=>{
+    const t=e.results[0][0].transcript.trim();
+    document.getElementById('mainInput').value=t;
+    stopMic();sendMessage();
+  };
+  recognition.onend=()=>stopMic();
+  recognition.start();
+  isRecording=true;
+  document.getElementById('micBtn').classList.add('recording');
+  document.getElementById('micBtn').textContent='⏹';
+  setPipe(1,'active','Voice · listening…');
+}
+function stopMic(){
+  if(recognition)recognition.stop();
+  isRecording=false;
+  document.getElementById('micBtn').classList.remove('recording');
+  document.getElementById('micBtn').textContent='🎙';
+}
+
+// ── QUICK DEMOS ───────────────────────────────────────────
+const DEMOS={
+  intro:"Good morning Doctor. I'm here to discuss our new cardioprotective agent — are you familiar with the recent PROTECT-III trial?",
+  skeptical:"I'm not convinced by the data you've presented. What were the primary endpoints in the Phase III trial, and what was the dropout rate?",
+  question:"Tell me more about the mechanism of action. How does it compare to existing ACE inhibitors in terms of renal protection?",
+};
+function runDemo(type){
+  if(type==='idle'){idleOn=!idleOn;return;}
+  const text=DEMOS[type];if(!text)return;
+  document.getElementById('mainInput').value=text;
+  if(apiKey)sendMessage();
+  else{
+    speakText(text);playSentenceVisemes(text);
+    addMsg('user','You (demo)',text);
+  }
+}
+
+// ── EXPORT ────────────────────────────────────────────────
+function exportSession(){
+  const data={persona:currentPersona.id,turns,tokens:totalTokens,visemes:totalVisemes,history};
+  const b=new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(b);a.download=`nextgenx-${Date.now()}.json`;a.click();
+}
+function clearAll(){
+  history=[];turns=0;totalTokens=0;totalVisemes=0;
+  document.getElementById('convoBox').innerHTML='<div class="convo-empty">Cleared. Start fresh ↙</div>';
+  ['stTurns','stTokens','stVisemes'].forEach(id=>document.getElementById(id).textContent='0');
+  document.getElementById('stLatency').textContent='--';
+  speechSynthesis?.cancel();clearTimeout(visemeTimer);
+  applyViseme('rest');setPipeAll('');
+}
+
+// ── RENDER LOOP ───────────────────────────────────────────
+let lastT=0,fc=0,fpsT2=0;
+function resize(){
+  const w=canvas.parentElement.clientWidth,h=canvas.parentElement.clientHeight;
+  renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();
+}
+window.addEventListener('resize',resize);
+
+function animate(ts){
+  requestAnimationFrame(animate);
+  const dt=Math.min((ts-lastT)/1000,0.05);lastT=ts;
+  resize();
+  headYaw+=(headYawT-headYaw)*0.08;headPitch+=(headPitchT-headPitch)*0.08;
+  avatarGroup.rotation.y=headYaw;avatarGroup.rotation.x=headPitch;
+  doIdle(dt);applyMorphs();
+  fc++;fpsT2+=dt;
+  if(fpsT2>0.6){document.getElementById('hudFps').textContent=Math.round(fc/fpsT2)+' fps';fc=0;fpsT2=0;}
+  renderer.render(scene,camera);
+}
+
+// ── INIT ──────────────────────────────────────────────────
+buildAvatar(PERSONAS[0]);
+initPersonaList();
+initVisemeMini();
+setEmotion('neutral');
+requestAnimationFrame(animate);
+if(window.speechSynthesis)setTimeout(()=>speechSynthesis.getVoices(),300);
+</script>
+</body>
+</html>
